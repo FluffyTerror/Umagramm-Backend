@@ -1,9 +1,10 @@
-package com.FluffyTerror.Umagramm_Backend.message;
+package com.FluffyTerror.Umagramm_Backend.models.message;
 
-import com.FluffyTerror.Umagramm_Backend.chat.Chat;
 import com.FluffyTerror.Umagramm_Backend.common.BaseAuditingEntity;
 import com.FluffyTerror.Umagramm_Backend.enums.MessageState;
 import com.FluffyTerror.Umagramm_Backend.enums.MessageType;
+import com.FluffyTerror.Umagramm_Backend.models.chat.Chat;
+import com.FluffyTerror.Umagramm_Backend.models.chat.GroupChat;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -16,27 +17,20 @@ import org.springframework.data.relational.core.mapping.Table;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@Table(name = "messages")
-public class Message extends BaseAuditingEntity {
+@Table(name = "group_messages")
+public class GroupMessage extends BaseAuditingEntity {
+
     @Id
     private Long id;
 
     private String content;
 
-    @ManyToOne
-    @JoinColumn(name="chat_id")
-    private Chat chat;
+    private Long groupChatId;
 
     @Column("status")
     private MessageState messageState;
 
     @Column("message_type")
     private MessageType messageType;
-
-    @Column("sender_id")
-    private String senderId;
-
-    @Column("receiver_id")
-    private String receiverId;
 
 }
