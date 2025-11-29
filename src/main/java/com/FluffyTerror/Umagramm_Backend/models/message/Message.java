@@ -1,6 +1,5 @@
 package com.FluffyTerror.Umagramm_Backend.models.message;
 
-import com.FluffyTerror.Umagramm_Backend.models.chat.Chat;
 import com.FluffyTerror.Umagramm_Backend.common.BaseAuditingEntity;
 import com.FluffyTerror.Umagramm_Backend.enums.MessageState;
 import com.FluffyTerror.Umagramm_Backend.enums.MessageType;
@@ -23,10 +22,14 @@ public class Message extends BaseAuditingEntity {
     private Long id;
 
     private Long chatId;      // FK → Chat
-    private Long groupChatId; // FK → GroupChat
+
     private String senderId;
 
     private String content;
+
+    @Column("message_type")
     private MessageType messageType;
+
+    @Column("status")
     private MessageState messageState;
 }
