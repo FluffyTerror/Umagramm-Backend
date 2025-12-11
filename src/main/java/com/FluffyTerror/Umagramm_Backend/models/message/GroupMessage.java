@@ -25,7 +25,7 @@ public class GroupMessage extends BaseAuditingEntity {
 
     private String content;
 
-    private Long groupChatId;
+    private String groupChatId;
 
     @Column("status")
     private MessageState messageState;

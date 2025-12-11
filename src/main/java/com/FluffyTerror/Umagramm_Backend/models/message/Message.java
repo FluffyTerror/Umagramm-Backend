@@ -21,10 +21,12 @@ public class Message extends BaseAuditingEntity {
     @Id
     private Long id;
 
-    private Long chatId;      // FK → Chat
+    private String chatId;      // FK → Chat
 
     private String senderId;
 
+    // Это больше не читаемый текст. Это PGP Message (Base64 или ASCII Armor).
+    // Серверу все равно, картинка там или текст — это просто набор байт.
     private String content;
 
     @Column("message_type")

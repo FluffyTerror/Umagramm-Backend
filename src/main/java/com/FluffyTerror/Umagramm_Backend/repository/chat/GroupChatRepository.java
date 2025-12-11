@@ -10,7 +10,7 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDateTime;
 
 @Repository
-public interface GroupChatRepository extends ReactiveCrudRepository<GroupChat, Long> {
+public interface GroupChatRepository extends ReactiveCrudRepository<GroupChat, String> {
     @Query("SELECT * FROM group_chat WHERE owner_id = :ownerId")
     Flux<GroupChat> findByOwnerId(String ownerId);
 

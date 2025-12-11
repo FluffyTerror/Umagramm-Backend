@@ -11,8 +11,8 @@ import reactor.core.publisher.Mono;
 @Repository
 public interface GroupMessageRepository extends ReactiveCrudRepository<GroupMessage, Long> {
     @Query("SELECT * FROM group_messages WHERE group_chat_id = :chatId ORDER BY group_messages.createdDate")
-    Flux<GroupMessage> findMessagesByChatId(Long chatId);
+    Flux<GroupMessage> findMessagesByChatId(String chatId);
 
     @Query("UPDATE group_messages SET message_state = :newState WHERE group_chat_id = :chatId")
-    Mono<Integer> setMessagesToSeenByChat(String newState, Long groupChatId); // ewState — это строка (enum.name()), потому что в R2DBC нет @Enumerated.
+    Mono<Integer> setMessagesToSeenByChat(String newState, String groupChatId); // ewState — это строка (enum.name()), потому что в R2DBC нет @Enumerated.
 }

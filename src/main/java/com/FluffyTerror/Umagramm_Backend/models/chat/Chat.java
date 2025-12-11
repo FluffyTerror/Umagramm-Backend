@@ -24,43 +24,8 @@ import java.util.List;
 public class Chat extends BaseAuditingEntity {
 
     @Id
-    private Long id;
+    private String id;
 
     private String senderId;
     private String recipientId;
-
-//    @Transient
-//    public String getChatName(final String senderId){
-//        if (recipient.getId().equals(senderId)){
-//            return sender.getFirstName()+ " " + sender.getLastName();
-//        }
-//        return recipient.getFirstName() + " " + recipient.getLastName();
-//    }
-//
-//    @Transient
-//    public Long getUnreadMessages(final String senderId){
-//        return messages
-//                .stream()
-//                .filter(m-> getRecipient().getId().equals(senderId))
-//                .filter(m -> MessageState.SENT == m.getMessageState()).count();
-//    }
-//    @Transient
-//    public String getLastMessage(){
-//        if (messages != null && !messages.isEmpty()){
-//            if(messages.get(0).getMessageType()!= MessageType.TEXT){
-//            return "Attachment";
-//            }
-//            return messages.get(0).getContent();
-//        }
-//        return null;
-//    }
-//    @Transient
-//    public LocalDateTime getLastMessageTime(){
-//        if (messages != null && !messages.isEmpty()){
-//            return messages.get(0).getCreatedDate();
-//        }
-//        return null;
-//    }
-
-
 }

@@ -22,13 +22,12 @@ import java.util.List;
 public class GroupChat extends BaseAuditingEntity {
 
     @Id
-    private Long id;
+    private String id;
 
     private String title;
     private String description;
     private String ownerId;
     private Long chatPhotoId;          // FK → attachment
-    private boolean isPublic;
     private String inviteLink;
     private Integer membersCount;      // кеш
     private Long lastMessageId;        // кеш
