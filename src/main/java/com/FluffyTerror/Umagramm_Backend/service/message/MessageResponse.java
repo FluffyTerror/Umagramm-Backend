@@ -1,0 +1,23 @@
+package com.FluffyTerror.Umagramm_Backend.service.message;
+
+import com.FluffyTerror.Umagramm_Backend.enums.MessageState;
+import com.FluffyTerror.Umagramm_Backend.enums.MessageType;
+import lombok.*;
+
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+public class MessageResponse {
+    private Long id;
+    private String content;
+    private MessageType type;
+    private MessageState state;
+    private String senderId;
+    private String chatId;
+    private LocalDateTime createdAt;
+    private byte[] media;
+}
