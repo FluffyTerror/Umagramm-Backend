@@ -3,13 +3,9 @@ package com.FluffyTerror.Umagramm_Backend.service.mapper;
 import com.FluffyTerror.Umagramm_Backend.enums.MessageType;
 import com.FluffyTerror.Umagramm_Backend.models.chat.Chat;
 import com.FluffyTerror.Umagramm_Backend.models.message.Message;
-import com.FluffyTerror.Umagramm_Backend.models.user.User;
-import com.FluffyTerror.Umagramm_Backend.repository.chat.ChatRepository;
-import com.FluffyTerror.Umagramm_Backend.repository.user.UserRepository;
 import com.FluffyTerror.Umagramm_Backend.service.chat.ChatResponse;
 import com.FluffyTerror.Umagramm_Backend.service.chat.ChatService;
 import lombok.AllArgsConstructor;
-import org.reactivestreams.Publisher;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -19,8 +15,6 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class ChatMapper {
 
-    private final ChatRepository chatRepository;
-    private final UserRepository userRepository;
     private final ChatService chatService;
 
     public Mono<ChatResponse> toChatResponse(Chat chat, String currentUserId) {
@@ -41,7 +35,6 @@ public class ChatMapper {
             String content = null;
             LocalDateTime time = null;
 
-            // Проверка на наличие сообщения (id != null)
             if (lastMsg.getId() != null) {
                 time = lastMsg.getCreatedDate();
                 content = (lastMsg.getMessageType() == MessageType.TEXT)

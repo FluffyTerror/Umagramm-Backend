@@ -2,11 +2,15 @@ package com.FluffyTerror.Umagramm_Backend.repository.message;
 
 import com.FluffyTerror.Umagramm_Backend.enums.MessageState;
 import com.FluffyTerror.Umagramm_Backend.models.message.Message;
+import org.springframework.data.r2dbc.repository.Modifying;
 import org.springframework.data.r2dbc.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 @Repository
 public interface MessageRepository extends ReactiveCrudRepository<Message, Long> {
@@ -15,7 +19,8 @@ public interface MessageRepository extends ReactiveCrudRepository<Message, Long>
     Flux<Message> findMessagesByChatId(String chatId);
 
     @Query("UPDATE messages SET message_state = :newState WHERE chat_id = :chatId")
-    Mono<Integer> setMessagesToSeenByChat(String newState, String chatId); // newState — это строка (enum.name()), потому что в R2DBC нет @Enumerated.
+    @Modifying
+    Mono<Integer> setMessagesToSeenByChat(@Param("newState") String newState, @Param("ChatId") String chatId); // newState — это строка (enum.name()), потому что в R2DBC нет @Enumerated.
 
     // ДОБАВЛЕНИЕ: Метод для подсчета непрочитанных сообщений
     // Ищем сообщения для чата (Long chatId), адресованные пользователю (String recipientId),
