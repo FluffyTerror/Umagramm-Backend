@@ -5,10 +5,11 @@ import com.FluffyTerror.Umagramm_Backend.service.message.MessageResponse;
 import com.FluffyTerror.Umagramm_Backend.service.message.MessageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
@@ -25,22 +26,20 @@ public class MessageController {
         return messageService.saveMessage(request);
     }
 
-    @PostMapping(value = "/upload-media", consumes = "multipart/form-data")
+    @PostMapping(value = "/upload-media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
-    public Mono<Void> uploadMedia(
-            @RequestParam("chat-id") String chatId,
-            //--TODO add @Parameter from swagger
-            @RequestParam("file") MultipartFile file,
+    public Mono<Void> upload(
+            @RequestPart("file") FilePart file,
+            @RequestPart("chatId") String chatId,
             Authentication authentication
     ) {
         return messageService.uploadMediaMessage(chatId, file, authentication);
-
     }
 
     @PatchMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
     public Mono<Void> setMessagesToSeen(@RequestParam("chat-id") String chatId, Authentication authentication) {
-       return messageService.setMessagesToSeen(chatId, authentication);
+        return messageService.setMessagesToSeen(chatId, authentication);
     }
 
     @GetMapping("chat/{chat-id}")

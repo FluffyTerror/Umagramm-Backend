@@ -6,13 +6,14 @@ import com.FluffyTerror.Umagramm_Backend.models.chat.Chat;
 import com.FluffyTerror.Umagramm_Backend.models.message.Message;
 import com.FluffyTerror.Umagramm_Backend.repository.chat.ChatRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.message.MessageRepository;
-import com.FluffyTerror.Umagramm_Backend.service.file.FileService;
+import com.FluffyTerror.Umagramm_Backend.service.attachment.AttachmentService;
 import com.FluffyTerror.Umagramm_Backend.service.mapper.MessageMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
+
 import reactor.core.publisher.Mono;
 
 import java.util.List;
@@ -23,7 +24,7 @@ public class MessageService {
     private final MessageRepository messageRepository;
     private final ChatRepository chatRepository;
     private final MessageMapper mapper;
-    private final FileService fileService;
+    private final AttachmentService attachmentService;
 
     public Mono<Void> saveMessage(MessageRequest messageRequest) {
 
@@ -43,8 +44,7 @@ public class MessageService {
     }
 
     public Mono<List<MessageResponse>> findMessages(String chatId) {
-        // Предполагаем, что репозиторий возвращает Flux<Message>
-        return messageRepository.findMessagesByChatId(chatId).map(mapper::toMessageResponse).collectList();
+        return messageRepository.findMessagesByChatId(chatId).flatMap(mapper::toResponse).collectList();
     }
 
 
@@ -58,22 +58,34 @@ public class MessageService {
 
     }
 
-    public Mono<Void> uploadMediaMessage(String chatId, MultipartFile file, Authentication authentication) {
-        return chatRepository.findById(chatId).switchIfEmpty(Mono.error(new Exception(String.format("Chat with id %s not found!", chatId)))).flatMap(chat -> {
-            final String recipientId = getRecipientId(chat, authentication);
-            final String senderId = getSenderId(chat, authentication);
-            final String filePath = fileService.saveFile(file, senderId);
-            Message message = new Message();
-            message.setChatId(chat.getId()); //хватит ли тут чата или нужно указать все таки recipientId?
-            message.setSenderId(senderId);
-            message.setMessageType(MessageType.IMAGE);
-            message.setMessageState(MessageState.SENT);
-            message.setContent(filePath);
-            return messageRepository.save(message);
+    public Mono<Void> uploadMediaMessage(
+            String chatId,
+            FilePart file,
+            Authentication authentication
+    ) {
+        return chatRepository.findById(chatId)
+                .switchIfEmpty(Mono.error(
+                        new Exception(String.format("Chat with id %s not found!", chatId))
+                ))
+                .flatMap(chat -> {
+                    final String recipientId = getRecipientId(chat, authentication);
+                    final String senderId = getSenderId(chat, authentication);
+                    return attachmentService.saveFile(file, senderId)
+                            .flatMap(filePath -> {
+                                Message message = new Message();
+                                message.setChatId(chat.getId());
+                                message.setSenderId(senderId);
+                                message.setMessageType(MessageType.IMAGE);
+                                message.setMessageState(MessageState.SENT);
+                                message.setContent(filePath);
+                                return messageRepository.save(message);
+                            });
 
-            //--TODO notification
-        }).then();
+                    //--TODO notification
+                })
+                .then();
     }
+
 
     private String getSenderId(Chat chat, Authentication authentication) {
         if (chat.getSenderId().equals(authentication.getName())) {

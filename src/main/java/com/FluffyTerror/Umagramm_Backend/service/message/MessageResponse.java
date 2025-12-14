@@ -2,9 +2,11 @@ package com.FluffyTerror.Umagramm_Backend.service.message;
 
 import com.FluffyTerror.Umagramm_Backend.enums.MessageState;
 import com.FluffyTerror.Umagramm_Backend.enums.MessageType;
+import com.FluffyTerror.Umagramm_Backend.service.attachment.AttachmentResponse;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -19,5 +21,5 @@ public class MessageResponse {
     private String senderId;
     private String chatId;
     private LocalDateTime createdAt;
-    private byte[] media;
+    private List<AttachmentResponse> attachments;
 }
