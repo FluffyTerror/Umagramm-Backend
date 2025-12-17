@@ -4,23 +4,18 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.config.Customizer;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
-import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
-import org.springframework.web.filter.CorsFilter;
 
 import java.util.Arrays;
 import java.util.Collections;
 
 @Configuration
-@EnableWebSecurity
+@EnableWebFluxSecurity
 public class SecurityConfig {
 
     @Bean
@@ -33,29 +28,9 @@ public class SecurityConfig {
          * <p>
          * Для этого создан бин {@Link corsFilter}
          */
-        http.cors(Customizer.withDefaults())
-                .csrf(ServerHttpSecurity.CsrfSpec::disable)
+        http.cors(Customizer.withDefaults()).csrf(ServerHttpSecurity.CsrfSpec::disable)
                 //передаем список запросов которые хотим авторизовать
-                .authorizeExchange(req ->
-                        req.pathMatchers("/auth/**",
-                                        "/v2/api-docs",
-                                        "/v3/api-docs",
-                                        "/v3/api-docs/**",
-                                        "/swagger-resources",
-                                        "/swagger-resources/**",
-                                        "/configuration/ui",
-                                        "/configuration/security",
-                                        "/swagger-ui/**",
-                                        "/webjars/**",
-                                        "/swagger-ui.html",
-                                        "/wss/**")
-                                .permitAll()
-                                .anyExchange()
-                                .authenticated()
-                )
-                .oauth2ResourceServer(auth ->
-                        auth.jwt(token ->
-                                token.jwtAuthenticationConverter(new KeyCloakAuthenticationConverter())));
+                .authorizeExchange(req -> req.pathMatchers("/auth/**", "/v2/api-docs", "/v3/api-docs", "/v3/api-docs/**", "/swagger-resources", "/swagger-resources/**", "/configuration/ui", "/configuration/security", "/swagger-ui/**", "/webjars/**", "/swagger-ui.html", "/wss/**").permitAll().anyExchange().authenticated()).oauth2ResourceServer(auth -> auth.jwt(token -> token.jwtAuthenticationConverter(new KeyCloakAuthenticationConverter())));
         return http.build();
     }
 
@@ -66,21 +41,9 @@ public class SecurityConfig {
         final CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
         config.setAllowedOrigins(Collections.singletonList("http://localhost:4200"));
-        config.setAllowedHeaders(Arrays.asList(
-                HttpHeaders.ORIGIN,
-                HttpHeaders.CONTENT_TYPE,
-                HttpHeaders.ACCEPT,
-                HttpHeaders.AUTHORIZATION
-        ));
-        config.setAllowedMethods(Arrays.asList(
-                "GET",
-                "POST",
-                "PUT",
-                "DELETE",
-                "OPTIONS",
-                "PATCH"
-        ));
-        source.registerCorsConfiguration("/**",config);
+        config.setAllowedHeaders(Arrays.asList(HttpHeaders.ORIGIN, HttpHeaders.CONTENT_TYPE, HttpHeaders.ACCEPT, HttpHeaders.AUTHORIZATION));
+        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        source.registerCorsConfiguration("/**", config);
 
         return new CorsWebFilter(source);
     }

@@ -3,6 +3,7 @@ package com.FluffyTerror.Umagramm_Backend.controller.chat;
 import com.FluffyTerror.Umagramm_Backend.common.StringResponse;
 import com.FluffyTerror.Umagramm_Backend.service.chat.ChatResponse;
 import com.FluffyTerror.Umagramm_Backend.service.chat.ChatService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -14,6 +15,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("api/v1/chats")
+@Tag(name = "Chat")
 public class ChatController {
     private final ChatService chatService;
 

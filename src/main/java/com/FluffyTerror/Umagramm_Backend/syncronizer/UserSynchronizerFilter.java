@@ -37,15 +37,22 @@ import reactor.core.publisher.Mono;
 @Component
 @RequiredArgsConstructor
 public class UserSynchronizerFilter implements WebFilter {
+
     private final UserSynchronizer userSynchronizer;
 
     @Override
-    public Mono<Void> filter(@NonNull ServerWebExchange exchange,@NonNull WebFilterChain chain) {
-        return ReactiveSecurityContextHolder.getContext().flatMap(context -> {
-            if (context.getAuthentication() instanceof JwtAuthenticationToken jwtToken) {
-                return userSynchronizer.synchronizeWithIdp(jwtToken.getToken());
-            }
-            return chain.filter(exchange);
-        }).switchIfEmpty(chain.filter(exchange));
+    public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+
+        return ReactiveSecurityContextHolder.getContext()
+                .flatMap(context -> {
+                    if (context.getAuthentication() instanceof JwtAuthenticationToken jwtToken) {
+                        return userSynchronizer
+                                .synchronizeWithIdp(jwtToken.getToken())
+                                .then(chain.filter(exchange)); // 🔥 ВАЖНО
+                    }
+                    return chain.filter(exchange);
+                })
+                .switchIfEmpty(chain.filter(exchange));
     }
 }
+

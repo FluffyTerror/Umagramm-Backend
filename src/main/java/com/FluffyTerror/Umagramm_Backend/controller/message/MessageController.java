@@ -3,6 +3,8 @@ package com.FluffyTerror.Umagramm_Backend.controller.message;
 import com.FluffyTerror.Umagramm_Backend.service.message.MessageRequest;
 import com.FluffyTerror.Umagramm_Backend.service.message.MessageResponse;
 import com.FluffyTerror.Umagramm_Backend.service.message.MessageService;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -17,6 +19,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("api/v1/messages")
+@Tag(name = "Message")
 public class MessageController {
     private final MessageService messageService;
 
@@ -30,6 +33,7 @@ public class MessageController {
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<Void> upload(
             @RequestPart("file") FilePart file,
+            @Parameter()
             @RequestPart("chatId") String chatId,
             Authentication authentication
     ) {

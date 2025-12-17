@@ -23,11 +23,61 @@ public class ChatService {
     private final ChatMapper chatMapper;
     private final UserRepository userRepository;
     private final MessageRepository messageRepository;
+    // Пример метода, который возвращает обогащенный ChatResponse
+    public Mono<ChatResponse> getChatResponse(String chatId, String currentUserId) {
+        return chatRepository.findById(chatId)
+                .flatMap(chat -> {
+                    // Вычисляем ID собеседника
+                    String recipientId = chat.getSenderId().equals(currentUserId)
+                            ? chat.getRecipientId()
+                            : chat.getSenderId();
+
+                    // Здесь собираем все данные параллельно (как было у вас в маппере)
+                    return Mono.zip(
+                            getChatName(chat.getId(), currentUserId),        // T1
+                            getUnreadMessages(chat.getId(), currentUserId),  // T2
+                            getLastMessage(chat.getId()),                    // T3
+                            isRecipientOnline(recipientId)                   // T4
+                    ).map(tuple ->
+                            // И вот тут вызываем "чистый" маппер
+                            chatMapper.toChatResponse(
+                                    chat,          // Сам чат
+                                    tuple.getT1(), // name
+                                    tuple.getT2(), // unread
+                                    tuple.getT3(), // lastMsg
+                                    tuple.getT4()  // online
+                            )
+                    );
+                });
+    }
 
     public Mono<List<ChatResponse>> getChatByReceiverId(Authentication currentUser) {
-        String userId = currentUser.getName();
-        return chatRepository.findAllChatsBySenderId(userId)
-                .flatMap(chat -> chatMapper.toChatResponse(chat, userId)).collectList();
+        String currentUserId = currentUser.getName();
+
+        return chatRepository.findAllChatsBySenderId(currentUserId)
+                // Просто вызываем наш универсальный метод для каждого чата
+                .flatMap(chat -> enrichChatWithDetails(chat, currentUserId))
+                .collectList();
+    }
+
+    // Вспомогательный метод: берет "голый" Чат и делает из него полный ChatResponse
+    private Mono<ChatResponse> enrichChatWithDetails(Chat chat, String currentUserId) {
+        String recipientId = chat.getSenderId().equals(currentUserId)
+                ? chat.getRecipientId()
+                : chat.getSenderId();
+
+        return Mono.zip(
+                getChatName(chat.getId(), currentUserId),
+                getUnreadMessages(chat.getId(), currentUserId),
+                getLastMessage(chat.getId()),
+                isRecipientOnline(recipientId)
+        ).map(tuple -> chatMapper.toChatResponse(
+                chat,
+                tuple.getT1(),
+                tuple.getT2(),
+                tuple.getT3(),
+                tuple.getT4()
+        ));
     }
 
     public Mono<String> getChatName(String chatId, String currentUserId) {

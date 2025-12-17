@@ -1,19 +1,18 @@
 spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9090/realms/Umagramm
   r2dbc:
     url: r2dbc:postgresql://localhost:5432/Umagramm_DB
     username: username
     password: gigapass1488
     flyway:
       enabled: false
-    servlet:
-      multipart:
-        max-file-size: 50MB
+  springdoc:
+    default-produces-media-type: application/json
     # TODO delete all instances of keycloak from whole project
-    security:
-      oauth2:
-        resourseserver:
-          Jwt:
-            issuer-uri: http://localhost:9090/realms/Umagramm
 
 # TODO maybe create a separate folders for uploaded files, based on each chat
 application:
