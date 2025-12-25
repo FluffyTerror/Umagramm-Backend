@@ -26,7 +26,7 @@ repositories {
 
 dependencies {
 // https://mvnrepository.com/artifact/org.springdoc/springdoc-openapi-starter-webflux-ui
-    implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:3.0.0")
+    implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:3.0.0'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.flywaydb:flyway-core'

@@ -51,5 +51,4 @@ public class MessageController {
         return messageService.findMessages(chatId)
                 .map(ResponseEntity::ok);
     }
-
 }

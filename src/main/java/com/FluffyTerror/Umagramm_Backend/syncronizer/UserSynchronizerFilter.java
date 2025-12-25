@@ -48,7 +48,7 @@ public class UserSynchronizerFilter implements WebFilter {
                     if (context.getAuthentication() instanceof JwtAuthenticationToken jwtToken) {
                         return userSynchronizer
                                 .synchronizeWithIdp(jwtToken.getToken())
-                                .then(chain.filter(exchange)); // 🔥 ВАЖНО
+                                .then(chain.filter(exchange));
                     }
                     return chain.filter(exchange);
                 })

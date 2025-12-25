@@ -9,7 +9,10 @@ spring:
     username: username
     password: gigapass1488
     flyway:
-      enabled: false
+      enabled: true
+      url: jdbc:postgresql://localhost:5432/Umagramm_DB
+      username: username
+      password: gigapass1488
   springdoc:
     default-produces-media-type: application/json
     # TODO delete all instances of keycloak from whole project

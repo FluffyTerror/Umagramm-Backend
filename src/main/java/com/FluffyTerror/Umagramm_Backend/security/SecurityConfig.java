@@ -30,7 +30,21 @@ public class SecurityConfig {
          */
         http.cors(Customizer.withDefaults()).csrf(ServerHttpSecurity.CsrfSpec::disable)
                 //передаем список запросов которые хотим авторизовать
-                .authorizeExchange(req -> req.pathMatchers("/auth/**", "/v2/api-docs", "/v3/api-docs", "/v3/api-docs/**", "/swagger-resources", "/swagger-resources/**", "/configuration/ui", "/configuration/security", "/swagger-ui/**", "/webjars/**", "/swagger-ui.html", "/wss/**").permitAll().anyExchange().authenticated()).oauth2ResourceServer(auth -> auth.jwt(token -> token.jwtAuthenticationConverter(new KeyCloakAuthenticationConverter())));
+                .authorizeExchange(req -> req.pathMatchers("/auth/**",
+                        "/v2/api-docs",
+                        "/v3/api-docs",
+                        "/v3/api-docs/**",
+                        "/swagger-resources",
+                        "/swagger-resources/**",
+                        "/configuration/ui",
+                        "/configuration/security",
+                        "/swagger-ui/**", "/webjars/**",
+                        "/swagger-ui.html",
+                        "/wss/**")
+                        .permitAll()
+                        .anyExchange()
+                        .authenticated())
+                .oauth2ResourceServer(auth -> auth.jwt(token -> token.jwtAuthenticationConverter(new KeyCloakAuthenticationConverter())));
         return http.build();
     }
 
