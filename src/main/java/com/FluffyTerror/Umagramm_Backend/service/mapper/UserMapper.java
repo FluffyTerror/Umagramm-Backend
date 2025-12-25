@@ -1,7 +1,11 @@
 package com.FluffyTerror.Umagramm_Backend.service.mapper;
 
 import com.FluffyTerror.Umagramm_Backend.models.user.User;
+import com.FluffyTerror.Umagramm_Backend.service.chat.ChatResponse;
+import com.FluffyTerror.Umagramm_Backend.service.user.UserResponse;
+import org.reactivestreams.Publisher;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -57,5 +61,15 @@ public class UserMapper {
 
         user.setLastSeen(LocalDateTime.now());
         return user;
+    }
+
+    public UserResponse toUserResponse (User user) {
+        return UserResponse.builder()
+                .id(user.getId())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .lastSeen(user.getLastSeen())
+                .isOnline(user.isOnline())
+                .build();
     }
 }

@@ -36,7 +36,7 @@ public class MessageMapper {
         return AttachmentResponse.builder()
                 .id(attachment.getId())
                 .type(attachment.getType())
-                .url("/api/v1/attachments/" + attachment.getId())
+                .url("/api/v1/attachments/" + attachment.getId())// --TODO скорее всего насрано
                 .build();
     }
 }
