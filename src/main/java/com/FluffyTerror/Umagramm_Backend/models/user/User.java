@@ -1,7 +1,6 @@
 package com.FluffyTerror.Umagramm_Backend.models.user;
 
 import com.FluffyTerror.Umagramm_Backend.models.attachment.Attachment;
-import com.FluffyTerror.Umagramm_Backend.models.chat.Chat;
 import com.FluffyTerror.Umagramm_Backend.common.BaseAuditingEntity;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -12,7 +11,7 @@ import org.springframework.data.annotation.Transient;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.LocalDateTime;
-import java.util.List;
+
 
 @Getter
 @Setter

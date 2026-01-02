@@ -1,7 +1,7 @@
 package com.FluffyTerror.Umagramm_Backend.controller.chat;
 
-import com.FluffyTerror.Umagramm_Backend.common.StringResponse;
-import com.FluffyTerror.Umagramm_Backend.service.chat.ChatResponse;
+import com.FluffyTerror.Umagramm_Backend.responses.StringResponse;
+import com.FluffyTerror.Umagramm_Backend.responses.chat.ChatResponse;
 import com.FluffyTerror.Umagramm_Backend.service.chat.ChatService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

@@ -1,6 +1,6 @@
 package com.FluffyTerror.Umagramm_Backend.controller.user;
 
-import com.FluffyTerror.Umagramm_Backend.service.user.UserResponse;
+import com.FluffyTerror.Umagramm_Backend.responses.user.UserResponse;
 import com.FluffyTerror.Umagramm_Backend.service.user.UserService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

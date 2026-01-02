@@ -1,7 +1,7 @@
 package com.FluffyTerror.Umagramm_Backend.controller.message;
 
-import com.FluffyTerror.Umagramm_Backend.service.message.MessageRequest;
-import com.FluffyTerror.Umagramm_Backend.service.message.MessageResponse;
+import com.FluffyTerror.Umagramm_Backend.requests.message.MessageRequest;
+import com.FluffyTerror.Umagramm_Backend.responses.message.MessageResponse;
 import com.FluffyTerror.Umagramm_Backend.service.message.MessageService;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
