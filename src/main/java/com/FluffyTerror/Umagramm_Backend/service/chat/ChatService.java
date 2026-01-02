@@ -7,7 +7,8 @@ import com.FluffyTerror.Umagramm_Backend.models.user.User;
 import com.FluffyTerror.Umagramm_Backend.repository.chat.ChatRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.message.MessageRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.user.UserRepository;
-import com.FluffyTerror.Umagramm_Backend.service.mapper.ChatMapper;
+import com.FluffyTerror.Umagramm_Backend.responses.chat.ChatResponse;
+import com.FluffyTerror.Umagramm_Backend.mapper.ChatMapper;
 import lombok.AllArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -65,6 +66,7 @@ public class ChatService {
         String recipientId = chat.getSenderId().equals(currentUserId)
                 ? chat.getRecipientId()
                 : chat.getSenderId();
+
 
         return Mono.zip(
                 getChatName(chat.getId(), currentUserId),

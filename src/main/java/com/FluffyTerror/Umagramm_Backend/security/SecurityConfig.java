@@ -1,10 +1,13 @@
 package com.FluffyTerror.Umagramm_Backend.security;
 
+import com.FluffyTerror.Umagramm_Backend.service.jwt.JwtAuthFilter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.reactive.EnableWebFluxSecurity;
+import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
@@ -16,49 +19,57 @@ import java.util.Collections;
 
 @Configuration
 @EnableWebFluxSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
 
+    private final JwtAuthFilter jwtAuthFilter;
+
     @Bean
-    public SecurityWebFilterChain securityFilterChain(ServerHttpSecurity http) throws Exception {
-        /*
-         * Когда говорим про корсы по умолчанию - это значит, что Spring будет искать все бины типа {@code CorsFilter}
-         * и будет получать все конфигурации для корсов.
-         * <p>
-         * Если ничего ему не передать - он по умолчанию возьмет свою конфигурацию, а она в свою очередь будет блокировать все запросы извне.
-         * <p>
-         * Для этого создан бин {@Link corsFilter}
-         */
-        http.cors(Customizer.withDefaults()).csrf(ServerHttpSecurity.CsrfSpec::disable)
-                //передаем список запросов которые хотим авторизовать
-                .authorizeExchange(req -> req.pathMatchers("/auth/**",
-                        "/v2/api-docs",
-                        "/v3/api-docs",
-                        "/v3/api-docs/**",
-                        "/swagger-resources",
-                        "/swagger-resources/**",
-                        "/configuration/ui",
-                        "/configuration/security",
-                        "/swagger-ui/**", "/webjars/**",
-                        "/swagger-ui.html",
-                        "/wss/**")
-                        .permitAll()
-                        .anyExchange()
-                        .authenticated())
-                .oauth2ResourceServer(auth -> auth.jwt(token -> token.jwtAuthenticationConverter(new KeyCloakAuthenticationConverter())));
-        return http.build();
+    public SecurityWebFilterChain securityFilterChain(ServerHttpSecurity http){
+        return http
+                // 1. Настройка CORS (использует ваш бин corsFilter)
+                .cors(Customizer.withDefaults())
+                // 2. Отключаем CSRF (для Stateless API это норма)
+                .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                // 3. Настройка доступов
+                .authorizeExchange(auth -> auth
+                        // Разрешаем регистрацию и логин (добавьте свои пути!)
+                        .pathMatchers("/api/v1/auth/register", "/api/v1/auth/login","/api/v1/auth/nigga").permitAll()
+                        // Разрешаем Swagger и Refresh
+                        .pathMatchers(
+                                "/v1/api/auth/refresh",
+                                "/v3/api-docs/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/webjars/**"
+                        ).permitAll()
+                        // Все остальное — только по токену
+                        .anyExchange().authenticated()
+                )
+                // 4. ДОБАВЛЯЕМ ВАШ JWT ФИЛЬТР
+                .addFilterAt(jwtAuthFilter, SecurityWebFiltersOrder.AUTHENTICATION)
+                .build();
     }
+
 
 
     @Bean
     public CorsWebFilter corsFilter() {
         final UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         final CorsConfiguration config = new CorsConfiguration();
-        config.setAllowCredentials(true);
-        config.setAllowedOrigins(Collections.singletonList("http://localhost:4200"));
-        config.setAllowedHeaders(Arrays.asList(HttpHeaders.ORIGIN, HttpHeaders.CONTENT_TYPE, HttpHeaders.ACCEPT, HttpHeaders.AUTHORIZATION));
-        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        source.registerCorsConfiguration("/**", config);
 
+        config.setAllowCredentials(true);
+        // Рекомендуется использовать allowedOriginPatterns для гибкости
+        config.setAllowedOriginPatterns(Collections.singletonList("http://localhost:*"));
+        config.setAllowedHeaders(Arrays.asList(
+                HttpHeaders.ORIGIN,
+                HttpHeaders.CONTENT_TYPE,
+                HttpHeaders.ACCEPT,
+                HttpHeaders.AUTHORIZATION
+        ));
+        config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+
+        source.registerCorsConfiguration("/**", config);
         return new CorsWebFilter(source);
     }
 }

@@ -11,7 +11,9 @@ import reactor.core.publisher.Mono;
 public interface UserRepository extends ReactiveCrudRepository<User, String> {
 
     @Query("SELECT * FROM users WHERE username = :username")
-    Mono<User> findUserByUsername(String username);
+    Mono<User> findByUsername(String username);
+
+    Mono<Boolean> existsByUsername(String username);
 
     @Query("SELECT * from users WHERE id != :publicId")
     Flux<User> getUsersExceptSelf(String publicId);

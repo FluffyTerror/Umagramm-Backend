@@ -1,7 +1,7 @@
 package com.FluffyTerror.Umagramm_Backend.service.notification;
 
-import com.FluffyTerror.Umagramm_Backend.notification.Notification;
-import com.FluffyTerror.Umagramm_Backend.ws.WebSocketSessionRegistry;
+import com.FluffyTerror.Umagramm_Backend.models.notification.Notification;
+import com.FluffyTerror.Umagramm_Backend.websockets.WebSocketSessionRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

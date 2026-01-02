@@ -4,7 +4,7 @@ services:
     image: postgres
     # Ставим дефолтные данные БД
     environment:
-      POSTGRES_USER: username
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: gigapass1488
       # Хранилище где лежит БД
       PGDATA: /var/lib/postgresql/data
@@ -31,22 +31,6 @@ services:
     networks:
       - Umagramm_network
     restart: unless-stopped
-
-    #по факту не нужен, но сделаю ради примера на вебе TODO убрать позже
-  keycloak:
-    container_name: keycloak-umagramm
-    image: quay.io/keycloak/keycloak:26.0.0
-    # тут указываю что вместо дефолтного 8080 использую 9090
-    ports:
-      - 9090:8080
-    # Ставим дефолтные данные админа
-    environment:
-      KEYCLOAK_ADMIN: golshi
-      KEYCLOAK_ADMIN_PASSWORD: golshi
-    networks:
-      - Umagramm_network
-    command:
-      - "start-dev"
 
 networks:
   Umagramm_network:
