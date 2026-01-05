@@ -32,7 +32,7 @@ public class AuthController {
     public Mono<RegisterResponse> register(@RequestPart("data") RegisterRequest request, // Данные пользователя (JSON или поля)
                                            @RequestPart("file") FilePart filePart){
         return authService.register(request, filePart);
-    };
+    }
 
     @PostMapping("/recover")
     public Mono<AuthResponse> recover(@RequestBody RecoverRequest request){

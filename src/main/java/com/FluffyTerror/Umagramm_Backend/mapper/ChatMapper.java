@@ -24,7 +24,7 @@ public class ChatMapper {
         String content = null;
         LocalDateTime time = null;
 
-        // Логика отображения остается в маппере (это нормально)
+
         if (lastMessage != null && lastMessage.getId() != null) {
             time = lastMessage.getCreatedDate();
             content = (lastMessage.getMessageType() == MessageType.TEXT)
@@ -34,7 +34,7 @@ public class ChatMapper {
 
         return ChatResponse.builder()
                 .id(chat.getId())
-                .name(chatName)
+                .name(chat.getTitle())
                 .unreadCount(unreadCount)
                 .lastMessage(content)
                 .lastMessageTime(time)

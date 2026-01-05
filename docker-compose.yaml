@@ -9,11 +9,11 @@ services:
       # Хранилище где лежит БД
       PGDATA: /var/lib/postgresql/data
       # Имя БД
-      POSTGRES_DB: Umagramm_DB
+      POSTGRES_DB: umagramm_db
     volumes:
       - postgres:/data/postgres
     ports:
-      - 5432:5432
+      - 5433:5432
     networks:
       - Umagramm_network
     restart: unless-stopped

@@ -9,6 +9,7 @@ import com.FluffyTerror.Umagramm_Backend.models.message.Message;
 import com.FluffyTerror.Umagramm_Backend.models.notification.Notification;
 import com.FluffyTerror.Umagramm_Backend.repository.attachment.AttachmentRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.chat.ChatRepository;
+import com.FluffyTerror.Umagramm_Backend.repository.chatMember.ChatMemberRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.message.MessageRepository;
 import com.FluffyTerror.Umagramm_Backend.responses.attachment.AttachmentResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.message.MessageResponse;
@@ -32,139 +33,105 @@ import java.util.List;
 public class MessageService {
     private final MessageRepository messageRepository;
     private final ChatRepository chatRepository;
+    private final ChatMemberRepository chatMemberRepository; // Добавляем
     private final AttachmentRepository attachmentRepository;
     private final MessageMapper mapper;
     private final AttachmentService attachmentService;
     private final NotificationService notificationService;
     private final ChatService chatService;
 
-    public Mono<Void> saveMessage(MessageRequest messageRequest) {
+    /**
+     * Сохранение текстового сообщения
+     */
+    public Mono<Void> saveMessage(MessageRequest messageRequest, Authentication authentication) {
+        String senderId = authentication.getName(); // Берем ID отправителя из токена
 
-        chatRepository.findById(messageRequest.getChatId()).switchIfEmpty(Mono.error(new Exception(String.format("Chat with id %s not found!", messageRequest.getChatId())))).flatMap(chat -> {
-            Message message = new Message();
-            message.setContent(messageRequest.getContent());
-            message.setChatId(chat.getId());
-            message.setSenderId(chat.getSenderId());
-            message.setMessageType(messageRequest.getType());
-            message.setMessageState(MessageState.SENT);
-            return messageRepository.save(message)
-                    .flatMap(saved -> {
-                        String recipient = chat.getRecipientId();
-                        return chatService.getChatName(chat.getId(), chat.getSenderId())
-                                .doOnNext(chatName ->
-                                {
+        return chatRepository.findById(messageRequest.getChatId())
+                .switchIfEmpty(Mono.error(new Exception("Chat not found")))
+                .flatMap(chat -> {
+                    Message message = new Message();
+                    message.setContent(messageRequest.getContent());
+                    message.setChatId(chat.getId());
+                    message.setSenderId(senderId);
+                    message.setMessageType(messageRequest.getType());
+                    message.setMessageState(MessageState.SENT);
 
-                                    Notification notification = Notification.builder().chatId(chat.getId())
-                                            .messageType(saved.getMessageType())
-                                            .content(saved.getContent())
-                                            .senderId(chat.getSenderId())
+                    return messageRepository.save(message)
+                            .flatMap(saved -> notifyAllChatMembers(saved, chat, senderId));
+                });
+    }
+
+    /**
+     * Вспомогательный метод для рассылки уведомлений всем участникам чата
+     */
+    private Mono<Void> notifyAllChatMembers(Message message, Chat chat, String senderId) {
+        return chatService.getChatName(chat, senderId)
+                .flatMapMany(chatName ->
+                        chatMemberRepository.findAllByChatId(chat.getId())
+                                .filter(member -> !member.getUserId().equals(senderId)) // Не шлем самому себе
+                                .flatMap(member -> {
+                                    Notification notification = Notification.builder()
+                                            .chatId(chat.getId())
+                                            .messageType(message.getMessageType())
+                                            .content(message.getContent())
+                                            .senderId(senderId)
                                             .type(NotificationType.MESSAGE)
                                             .chatName(chatName)
                                             .build();
-                                    notificationService.sendNotification(recipient, notification);
-                                }).then();
 
-                    });
+                                    // Отправляем уведомление конкретному участнику
+                                    return notificationService.sendNotification(member.getUserId(), notification);
+                                })
+                ).then();
+    }
 
-            //--TODO не указываю ReceiverId - возможно будут проблемы из за этого
-        });
+    /**
+     * Загрузка медиа-сообщения
+     */
+    public Mono<Void> uploadMediaMessage(String chatId, FilePart file, Authentication authentication) {
+        String senderId = authentication.getName();
 
-        return Mono.empty().then();
+        return chatRepository.findById(chatId)
+                .switchIfEmpty(Mono.error(new Exception("Chat not found")))
+                .flatMap(chat -> attachmentService.saveFile(file, senderId)
+                        .flatMap(filePath -> {
+                            Message message = new Message();
+                            message.setChatId(chat.getId());
+                            message.setSenderId(senderId);
+                            message.setMessageType(MessageType.IMAGE);
+                            message.setMessageState(MessageState.SENT);
+
+                            return messageRepository.save(message)
+                                    .flatMap(savedMessage -> {
+                                        Attachment attachment = new Attachment();
+                                        attachment.setMessageId(savedMessage.getId());
+                                        attachment.setType(MessageType.IMAGE);
+                                        attachment.setUrl(filePath);
+
+                                        return attachmentRepository.save(attachment)
+                                                .then(notifyAllChatMembers(savedMessage, chat, senderId));
+                                    });
+                        })
+                ).then();
+    }
+
+    /**
+     * Прочтение сообщений
+     */
+    public Mono<Void> setMessagesToSeen(String chatId, Authentication authentication) {
+        String currentUserId = authentication.getName();
+
+        return messageRepository.setMessagesToSeenByChat(
+                MessageState.SEEN, // Новый статус
+                MessageState.SENT, // Какой статус меняем
+                chatId,
+                currentUserId
+        ).then(/* логика уведомлений */);
     }
 
     public Mono<List<MessageResponse>> findMessages(String chatId) {
-        return messageRepository.findMessagesByChatId(chatId).flatMap(mapper::toResponse).collectList();
-    }
-
-
-    @Transactional //ставим аннотацию так как метод setMessagesToSeenByChat имеет аннотацию @Modifying
-    public Mono<Void> setMessagesToSeen(String chatId, Authentication authentication) {
-        return chatRepository.findById(chatId).switchIfEmpty(Mono.error(new Exception(String.format("Chat with id %s not found!", chatId)))).flatMap(chat -> {
-            final String recipientId = getRecipientId(chat, authentication);
-            return messageRepository.setMessagesToSeenByChat(MessageState.SEEN.name(), chat.getId()).thenReturn(Tuples.of(chat, recipientId));
-        }).doOnNext(tuple -> {
-            Chat chat = tuple.getT1();
-            String recipientId = tuple.getT2();
-            Notification notification = Notification.builder()
-                    .chatId(chat.getId())
-                    .type(NotificationType.SEEN)
-                    .senderId(chat.getSenderId())
-                    .build();
-            notificationService.sendNotification(recipientId, notification);
-        }).then();
-
-    }
-
-    public Mono<Void> uploadMediaMessage(
-            String chatId,
-            FilePart file,
-            Authentication authentication
-    ) {
-        return chatRepository.findById(chatId)
-                .switchIfEmpty(Mono.error(
-                        new Exception(String.format("Chat with id %s not found!", chatId))
-                ))
-                .flatMap(chat -> {
-                    final String recipientId = getRecipientId(chat, authentication);
-                    final String senderId = getSenderId(chat, authentication);
-
-                    return attachmentService.saveFile(file, senderId)
-                            .flatMap(filePath -> {
-
-                                Message message = new Message();
-                                message.setChatId(chat.getId());
-                                message.setSenderId(senderId);
-                                message.setMessageType(MessageType.IMAGE);
-                                message.setMessageState(MessageState.SENT);
-
-                                return messageRepository.save(message)
-                                        .flatMap(savedMessage -> {
-
-                                            Attachment attachment = new Attachment();
-                                            attachment.setMessageId(savedMessage.getId());
-                                            attachment.setType(MessageType.IMAGE);
-                                            attachment.setUrl(filePath);
-
-                                            return attachmentRepository.save(attachment)
-                                                    .doOnNext(savedAttachment -> {
-
-                                                        Notification notification = Notification.builder()
-                                                                .chatId(chat.getId())
-                                                                .senderId(senderId)
-                                                                .messageType(MessageType.IMAGE)
-                                                                .type(NotificationType.MESSAGE)
-                                                                .attachments(List.of(
-                                                                        AttachmentResponse.builder()
-                                                                                .id(savedAttachment.getId())
-                                                                                .type(savedAttachment.getType())
-                                                                                .url(savedAttachment.getUrl())
-                                                                                .build())).build();
-
-
-                                                        notificationService.sendNotification(
-                                                                recipientId,
-                                                                notification
-                                                        );
-                                                    });
-                                        });
-                            });
-                })
-                .then();
-    }
-
-
-    private String getSenderId(Chat chat, Authentication authentication) {
-        if (chat.getSenderId().equals(authentication.getName())) {
-            return chat.getSenderId();
-        }
-        return chat.getRecipientId();
-    }
-
-
-    private String getRecipientId(Chat chat, Authentication authentication) {
-        if (chat.getSenderId().equals(authentication.getName())) {
-            return chat.getRecipientId();
-        }
-        return chat.getSenderId();
+        return messageRepository.findMessagesByChatId(chatId)
+                .flatMap(mapper::toResponse)
+                .collectList();
     }
 }

@@ -1,13 +1,15 @@
 spring:
   r2dbc:
-    url: r2dbc:postgresql://localhost:5432/Umagramm_DB
-    username: username
+    url: r2dbc:postgresql://localhost:5433/umagramm_db
+    username: postgres # Было username
     password: gigapass1488
-    flyway:
-      enabled: true
-      url: jdbc:postgresql://localhost:5432/Umagramm_DB
-      username: username
-      password: gigapass1488
+  flyway:
+    enabled: true
+    url: jdbc:postgresql://localhost:5433/umagramm_db
+    user: postgres     # Было username
+    password: gigapass1488
+    locations: classpath:db/migration
+    baseline-on-migrate: true
   springdoc:
     default-produces-media-type: application/json
 

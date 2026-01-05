@@ -19,24 +19,33 @@ import java.util.List;
 public class ChatController {
     private final ChatService chatService;
 
-
-    @PostMapping
-    public Mono<ResponseEntity<StringResponse>> createChat(
-            @RequestParam(name = "sender-id") String senderId,
-            @RequestParam(name = "receiver-id") String receiverId
+    /**
+     * Создание личного чата.
+     * Теперь нам нужен только ID того, с кем мы хотим начать чат.
+     * Наш собственный ID берется из Authentication.
+     */
+    @PostMapping("/private")
+    public Mono<ResponseEntity<StringResponse>> createPrivateChat(
+            @RequestParam(name = "receiver-id") String receiverId,
+            Authentication authentication
     ) {
-        return chatService.createChat(senderId, receiverId).map(
-                chatId -> ResponseEntity.ok(StringResponse
-                        .builder()
-                        .response(chatId)
-                        .build())
-        );
+        String currentUserId = authentication.getName();
+        return chatService.createPrivateChat(currentUserId, receiverId)
+                .map(chatId -> ResponseEntity.ok(
+                        StringResponse.builder()
+                                .response(chatId)
+                                .build()
+                ));
     }
 
+    /**
+     * Получение всех чатов текущего пользователя (и личных, и групп).
+     */
     @GetMapping
-    public Mono<ResponseEntity<List<ChatResponse>>> getChatsByReceiver(Authentication authentication) {
-        return chatService.getChatByReceiverId(authentication).map(
-                        ResponseEntity::ok);
+    public Mono<ResponseEntity<List<ChatResponse>>> getUserChats(Authentication authentication) {
+        String currentUserId = authentication.getName();
+        return chatService.getUserChats(currentUserId)
+                .collectList() // Превращаем Flux в Mono<List>
+                .map(ResponseEntity::ok);
     }
-
 }

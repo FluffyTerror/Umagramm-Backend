@@ -1,160 +1,148 @@
 package com.FluffyTerror.Umagramm_Backend.service.chat;
 
+import com.FluffyTerror.Umagramm_Backend.enums.ChatType;
 import com.FluffyTerror.Umagramm_Backend.enums.MessageState;
 import com.FluffyTerror.Umagramm_Backend.models.chat.Chat;
+import com.FluffyTerror.Umagramm_Backend.models.chatMember.ChatMember;
 import com.FluffyTerror.Umagramm_Backend.models.message.Message;
 import com.FluffyTerror.Umagramm_Backend.models.user.User;
 import com.FluffyTerror.Umagramm_Backend.repository.chat.ChatRepository;
+import com.FluffyTerror.Umagramm_Backend.repository.chatMember.ChatMemberRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.message.MessageRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.user.UserRepository;
 import com.FluffyTerror.Umagramm_Backend.responses.chat.ChatResponse;
 import com.FluffyTerror.Umagramm_Backend.mapper.ChatMapper;
 import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 @Service
-@AllArgsConstructor
+@RequiredArgsConstructor // Используем для чистоты кода вместо @AllArgsConstructor
 public class ChatService {
     private final ChatRepository chatRepository;
+    private final ChatMemberRepository chatMemberRepository; // Новый репозиторий
     private final ChatMapper chatMapper;
     private final UserRepository userRepository;
     private final MessageRepository messageRepository;
-    // Пример метода, который возвращает обогащенный ChatResponse
-    public Mono<ChatResponse> getChatResponse(String chatId, String currentUserId) {
-        return chatRepository.findById(chatId)
-                .flatMap(chat -> {
-                    // Вычисляем ID собеседника
-                    String recipientId = chat.getSenderId().equals(currentUserId)
-                            ? chat.getRecipientId()
-                            : chat.getSenderId();
-
-                    // Здесь собираем все данные параллельно (как было у вас в маппере)
-                    return Mono.zip(
-                            getChatName(chat.getId(), currentUserId),        // T1
-                            getUnreadMessages(chat.getId(), currentUserId),  // T2
-                            getLastMessage(chat.getId()),                    // T3
-                            isRecipientOnline(recipientId)                   // T4
-                    ).map(tuple ->
-                            // И вот тут вызываем "чистый" маппер
-                            chatMapper.toChatResponse(
-                                    chat,          // Сам чат
-                                    tuple.getT1(), // name
-                                    tuple.getT2(), // unread
-                                    tuple.getT3(), // lastMsg
-                                    tuple.getT4()  // online
-                            )
-                    );
-                });
-    }
-
-    public Mono<List<ChatResponse>> getChatByReceiverId(Authentication currentUser) {
-        String currentUserId = currentUser.getName();
-
-        return chatRepository.findAllChatsBySenderId(currentUserId)
-                // Просто вызываем наш универсальный метод для каждого чата
-                .flatMap(chat -> enrichChatWithDetails(chat, currentUserId))
-                .collectList();
-    }
-
-    // Вспомогательный метод: берет "голый" Чат и делает из него полный ChatResponse
-    private Mono<ChatResponse> enrichChatWithDetails(Chat chat, String currentUserId) {
-        String recipientId = chat.getSenderId().equals(currentUserId)
-                ? chat.getRecipientId()
-                : chat.getSenderId();
-
-
-        return Mono.zip(
-                getChatName(chat.getId(), currentUserId),
-                getUnreadMessages(chat.getId(), currentUserId),
-                getLastMessage(chat.getId()),
-                isRecipientOnline(recipientId)
-        ).map(tuple -> chatMapper.toChatResponse(
-                chat,
-                tuple.getT1(),
-                tuple.getT2(),
-                tuple.getT3(),
-                tuple.getT4()
-        ));
-    }
-
-    public Mono<String> getChatName(String chatId, String currentUserId) {
-        return chatRepository.findById(chatId)
-                .flatMap(chat ->
-                        Mono.zip(
-                                userRepository.getUserById(chat.getSenderId()),
-                                userRepository.getUserById(chat.getRecipientId())
-                        ).map(tuple -> {
-                            User sender = tuple.getT1();
-                            User recipient = tuple.getT2();
-
-                            if (recipient.getId().equals(currentUserId)) {
-                                return sender.getFirstName() + " " + sender.getLastName();
-                            }
-                            return recipient.getFirstName() + " " + recipient.getLastName();
-                        })
-                );
-    }
-
 
     /**
-     * Возвращает количество непрочитанных сообщений для чата, где текущий пользователь - получатель.
-     *
-     * @param messageChatId ID чата (Long, из сущности Message)
-     * @param currentUserId ID текущего пользователя (String)
-     * @return Mono с количеством непрочитанных сообщений
+     * Получает список всех чатов пользователя (и личных, и групповых)
      */
-    public Mono<Long> getUnreadMessages(String messageChatId, String currentUserId) {
+    public Flux<ChatResponse> getUserChats(String currentUserId) {
+        // Находим все записи об участии пользователя в чатах
+        return chatMemberRepository.findAllByUserId(currentUserId)
+                .flatMap(member -> chatRepository.findById(member.getChatId()))
+                .flatMap(chat -> enrichChatWithDetails(chat, currentUserId));
+    }
 
-        return messageRepository.findAllUnreadMessages(messageChatId, currentUserId, MessageState.SENT)
-                .count();
+    /**
+     * Обогащает базовый объект Chat данными для отображения (имя, последнее сообщение и т.д.)
+     */
+    private Mono<ChatResponse> enrichChatWithDetails(Chat chat, String currentUserId) {
+        // Для личного чата нам нужен ID собеседника для статуса "Online"
+        Mono<String> partnerIdMono = (chat.getChatType() == ChatType.PRIVATE)
+                ? getPartnerId(chat.getId(), currentUserId)
+                : Mono.just(""); // Для групп ID собеседника не применим
+
+        return partnerIdMono.flatMap(partnerId ->
+                Mono.zip(
+                        getChatName(chat, currentUserId),                // Название (Имя друга или Название группы)
+                        getUnreadMessages(chat.getId(), currentUserId),   // Непрочитанные
+                        getLastMessage(chat.getId()),                     // Последнее сообщение
+                        isPartnerOnline(partnerId, chat.getChatType())        // Статус "В сети"
+                ).map(tuple -> chatMapper.toChatResponse(
+                        chat,
+                        tuple.getT1(), // name
+                        tuple.getT2(), // unread
+                        tuple.getT3(), // lastMsg
+                        tuple.getT4()  // online
+                ))
+        );
+    }
+
+    /**
+     * Определяет название чата в зависимости от его типа
+     */
+    public Mono<String> getChatName(Chat chat, String currentUserId) {
+        if (chat.getChatType() == ChatType.GROUP) {
+            return Mono.just(chat.getTitle() != null ? chat.getTitle() : "Group Chat");
+        }
+
+        // Для личного чата ищем имя "другого" человека
+        return getPartnerId(chat.getId(), currentUserId)
+                .flatMap(userRepository::findById)
+                .map(u -> u.getFirstName() + " " + u.getLastName())
+                .defaultIfEmpty("Unknown User");
+    }
+
+    /**
+     * Находит ID собеседника в приватном чате
+     */
+    private Mono<String> getPartnerId(String chatId, String currentUserId) {
+        return chatMemberRepository.findAllByChatId(chatId)
+                .filter(member -> !member.getUserId().equals(currentUserId))
+                .next()
+                .map(ChatMember::getUserId);
+    }
+
+    /**
+     * Создает новый ПРИВАТНЫЙ чат между двумя пользователями
+     */
+    @Transactional
+    public Mono<String> createPrivateChat(String creatorId, String partnerId) {
+        // 1. Проверяем, существует ли уже такой приватный чат
+        return chatMemberRepository.findCommonPrivateChat(creatorId, partnerId)
+                .switchIfEmpty(
+                        // 2. Если нет, создаем новый чат
+                        Mono.defer(() -> {
+                            Chat chat = new Chat();
+                            chat.setId(UUID.randomUUID().toString());
+                            chat.setChatType(ChatType.PRIVATE);
+
+                            return chatRepository.save(chat)
+                                    .flatMap(savedChat -> {
+                                        // 3. Создаем записи для обоих участников
+                                        ChatMember m1 = createMember(savedChat.getId(), creatorId);
+                                        ChatMember m2 = createMember(savedChat.getId(), partnerId);
+
+                                        return chatMemberRepository.saveAll(List.of(m1, m2))
+                                                .then(Mono.just(savedChat));
+                                    });
+                        })
+                )
+                .map(Chat::getId);
+    }
+
+    private ChatMember createMember(String chatId, String userId) {
+        ChatMember member = new ChatMember();
+        member.setChatId(chatId);
+        member.setUserId(userId);
+        member.setJoinedAt(LocalDateTime.now());
+        return member;
     }
 
 
+
+    public Mono<Long> getUnreadMessages(String chatId, String currentUserId) {
+        return messageRepository.countUnreadMessages(chatId, currentUserId, MessageState.SENT);
+    }
+
     public Mono<Message> getLastMessage(String chatId) {
-        // вся проверка и обработка в маппере
         return messageRepository.findLastMessageByChatId(chatId);
     }
 
-    /**
-     * Возвращает время создания последнего сообщения в чате.
-     *
-     * @param messageChatId ID чата (Long, из сущности Message)
-     * @return Mono с LocalDateTime или null
-     */
-    public Mono<LocalDateTime> getLastMessageTime(String messageChatId) {
-        return messageRepository.findLastMessageByChatId(messageChatId)
-                .map(Message::getCreatedDate)
-                .defaultIfEmpty(null);
-    }
-
-    public Mono<Boolean> isRecipientOnline(String recipientId) {
-        return userRepository.findById(recipientId)
+    public Mono<Boolean> isPartnerOnline(String partnerId, ChatType type) {
+        if (type == ChatType.GROUP || partnerId.isEmpty()) return Mono.just(false);
+        return userRepository.findById(partnerId)
                 .map(User::isOnline)
                 .defaultIfEmpty(false);
-    }
-
-    public Mono<String> createChat(String senderId, String recipientId) {
-        Mono<User> sender = userRepository.getUserById(senderId);
-        Mono<User> recipient = userRepository.getUserById(recipientId);
-        return chatRepository.findChatBySenderIdAndRecipientId(senderId, recipientId).map(
-                Chat::getId
-        ).switchIfEmpty(
-                Mono.zip(sender, recipient).flatMap(
-                        tuple -> {
-                            User pSender = tuple.getT1();
-                            User pRecipient = tuple.getT2();
-                            Chat chat = new Chat();
-                            chat.setSenderId(pSender.getId());
-                            chat.setRecipientId(pRecipient.getId());
-                            return chatRepository.save(chat).map(Chat::getId);
-
-                        }
-                )
-        );
     }
 }

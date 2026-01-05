@@ -25,8 +25,9 @@ public class MessageController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Mono<Void> saveMessage(@RequestBody MessageRequest request) {
-        return messageService.saveMessage(request);
+    public Mono<Void> saveMessage(@RequestBody MessageRequest request
+            , Authentication authentication) {
+        return messageService.saveMessage(request, authentication);
     }
 
     @PostMapping(value = "/upload-media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

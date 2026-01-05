@@ -15,21 +15,17 @@ import java.util.List;
 @Repository
 public interface MessageRepository extends ReactiveCrudRepository<Message, Long> {
 
-    @Query("SELECT * FROM messages WHERE chatId = :chatId ORDER BY messages.createdDate")
+    @Query("SELECT * FROM messages WHERE chat_id = :chatId ORDER BY created_date DESC")
     Flux<Message> findMessagesByChatId(String chatId);
 
-    @Query("UPDATE messages SET message_state = :newState WHERE chat_id = :chatId")
-    @Modifying
-    Mono<Integer> setMessagesToSeenByChat(@Param("newState") String newState, @Param("ChatId") String chatId); // newState — это строка (enum.name()), потому что в R2DBC нет @Enumerated.
-
-    // ДОБАВЛЕНИЕ: Метод для подсчета непрочитанных сообщений
-    // Ищем сообщения для чата (Long chatId), адресованные пользователю (String recipientId),
-    // с определенным статусом (String stateName).
-    @Query("SELECT * FROM messages WHERE chat_id = :chatId AND sender_id != :currentUserId AND status = :stateName")
-    Flux<Message> findAllUnreadMessages(String chatId, String currentUserId, MessageState stateName);
-
-    // ДОБАВЛЕНИЕ: Метод для получения последнего сообщения
-    // Используем LIMIT 1, чтобы получить только одно сообщение
     @Query("SELECT * FROM messages WHERE chat_id = :chatId ORDER BY created_date DESC LIMIT 1")
     Mono<Message> findLastMessageByChatId(String chatId);
+
+    // Подсчет непрочитанных: статус SENT и отправитель не я
+    @Query("SELECT COUNT(*) FROM messages WHERE chat_id = :chatId AND sender_id != :userId AND status = :status")
+    Mono<Long> countUnreadMessages(String chatId, String userId, MessageState status);
+
+    @Modifying
+    @Query("UPDATE messages SET status = :targetStatus WHERE chat_id = :chatId AND status = :oldStatus AND sender_id != :currentUserId")
+    Mono<Void> setMessagesToSeenByChat(MessageState targetStatus, MessageState oldStatus, String chatId, String currentUserId);
 }

@@ -5,7 +5,7 @@ import com.FluffyTerror.Umagramm_Backend.exceptions.UserAlreadyExistsException;
 import com.FluffyTerror.Umagramm_Backend.models.attachment.Attachment;
 import com.FluffyTerror.Umagramm_Backend.models.user.User;
 import com.FluffyTerror.Umagramm_Backend.models.userAuth.UserRecoveryCode;
-import com.FluffyTerror.Umagramm_Backend.repository.UserAuthRepository;
+import com.FluffyTerror.Umagramm_Backend.repository.userAuth.UserAuthRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.attachment.AttachmentRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.user.UserRepository;
 import com.FluffyTerror.Umagramm_Backend.requests.authentication.RegisterRequest;
@@ -40,14 +40,14 @@ public class AuthService {
     public Mono<RegisterResponse> register(RegisterRequest request, FilePart photo) {
         return users.existsByUsername(request.username())
                 .flatMap(exists -> {
-                    if (exists) {
-                        return Mono.error(new UserAlreadyExistsException("Username already exists"));
-                    }
+//                    if (exists) {
+//                        return Mono.error(new UserAlreadyExistsException("Username already exists"));
+//                    }
 
-                    // 1. Подготавливаем ID пользователя заранее
+                    // Подготавливаем ID пользователя заранее
                     String userId = UUID.randomUUID().toString();
 
-                    // 2. Если фото передано, запускаем цепочку сохранения файла
+                    // Если фото передано, запускаем цепочку сохранения файла
                     Mono<Long> photoIdMono = (photo != null)
                             ? attachmentService.saveFile(photo, userId)
                             .flatMap(filePath -> {
@@ -60,7 +60,7 @@ public class AuthService {
                             .map(Attachment::getId)
                             : Mono.justOrEmpty(java.util.Optional.empty());
 
-                    // 3. Собираем всё вместе
+                    // Собираем всё вместе
                     return photoIdMono.defaultIfEmpty(0L) // Заглушка, если фото нет
                             .flatMap(photoId -> {
                                 User user = new User();
