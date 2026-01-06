@@ -37,7 +37,7 @@ public class SecurityConfig {
                         .pathMatchers("/api/v1/auth/register", "/api/v1/auth/login","/api/v1/auth/nigga").permitAll()
                         // Разрешаем Swagger и Refresh
                         .pathMatchers(
-                                "/v1/api/auth/refresh",
+                                "/api/v1/auth/refresh",
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",

@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;
+import org.springframework.data.domain.Persistable;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
@@ -22,16 +23,29 @@ import java.util.List;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@Table("chat")
-public class Chat extends BaseAuditingEntity {
+@Table("chats")
+public class Chat extends BaseAuditingEntity implements Persistable<String> {
 
     @Id
     private String id;
-    private String title; // Название для групп, null для личек
-    private String avatarUrl; // Общий аватар для группы
-    private String senderId;
-    private String recipientId;
 
-    @Column("chat_type")
+    private String title; // Название для групп, null для личек
+
+    private String avatarUrl; // Общий аватар для группы
+
+    @Transient
+    private boolean isNew = false; // По умолчанию false
+
+    @Column("type")
     private ChatType chatType;
+
+    @Override
+    public boolean isNew() {
+        return isNew || id == null;
+    }
+
+    // Метод для удобства
+    public void markNew() {
+        this.isNew = true;
+    }
 }

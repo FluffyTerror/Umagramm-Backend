@@ -1,5 +1,6 @@
 package com.FluffyTerror.Umagramm_Backend.controller.chat;
 
+import com.FluffyTerror.Umagramm_Backend.models.user.User;
 import com.FluffyTerror.Umagramm_Backend.responses.StringResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.chat.ChatResponse;
 import com.FluffyTerror.Umagramm_Backend.service.chat.ChatService;
@@ -29,7 +30,8 @@ public class ChatController {
             @RequestParam(name = "receiver-id") String receiverId,
             Authentication authentication
     ) {
-        String currentUserId = authentication.getName();
+        User user = (User) authentication.getPrincipal();
+        String currentUserId = user.getId();
         return chatService.createPrivateChat(currentUserId, receiverId)
                 .map(chatId -> ResponseEntity.ok(
                         StringResponse.builder()
@@ -41,7 +43,7 @@ public class ChatController {
     /**
      * Получение всех чатов текущего пользователя (и личных, и групп).
      */
-    @GetMapping
+    @GetMapping("/by-user")
     public Mono<ResponseEntity<List<ChatResponse>>> getUserChats(Authentication authentication) {
         String currentUserId = authentication.getName();
         return chatService.getUserChats(currentUserId)

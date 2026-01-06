@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 
 public record RefreshResponse(
         String accessToken,
+        String refreshToken,
         LocalDateTime expiresAt
 ) {
 }

@@ -12,6 +12,7 @@ import org.springframework.web.server.WebFilterChain;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -32,15 +33,27 @@ public class JwtAuthFilter implements WebFilter {
 
         String token = header.substring(7);
 
-        return Mono.fromCallable(() -> jwtService.extractUserId(token))
-                .subscribeOn(Schedulers.boundedElastic()) // Криптография — это блокирующая задача
-                .flatMap((UUID id) -> userRepository.findById(String.valueOf(id)))
-                .map(user -> new UsernamePasswordAuthenticationToken(user, null))
-                .flatMap(auth -> chain.filter(exchange)
-                        .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth))
-                )
-                // Если токен невалиден или пользователь не найден — просто идем дальше без аутентификации
-                .onErrorResume(e -> chain.filter(exchange));
+        try {
+            UUID userId = jwtService.extractUserId(token);
+            System.out.println(">>> Token extracted for User ID: " + userId); // ЛОГ 1
+
+            return userRepository.findById(userId.toString())
+                    .doOnNext(user -> System.out.println(">>> User found in DB: " + user.getUsername())) // ЛОГ 2
+                    .map(user -> new UsernamePasswordAuthenticationToken(user, null, Collections.emptyList()))
+                    .flatMap(auth -> chain.filter(exchange)
+                            .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth))
+                    )
+                    .switchIfEmpty(Mono.defer(() -> {
+                        System.out.println(">>> USER NOT FOUND IN DB!"); // ЛОГ 3
+                        return chain.filter(exchange);
+                    }))
+                    .onErrorResume(e -> {
+                        System.out.println(">>> JWT Error: " + e.getMessage()); // ЛОГ 4
+                        return chain.filter(exchange);
+                    });
+        } catch (Exception e) {
+            return chain.filter(exchange);
+        }
     }
 }
 

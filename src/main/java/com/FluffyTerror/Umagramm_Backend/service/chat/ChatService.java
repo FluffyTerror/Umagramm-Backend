@@ -1,6 +1,7 @@
 package com.FluffyTerror.Umagramm_Backend.service.chat;
 
 import com.FluffyTerror.Umagramm_Backend.enums.ChatType;
+import com.FluffyTerror.Umagramm_Backend.enums.MemberRole;
 import com.FluffyTerror.Umagramm_Backend.enums.MessageState;
 import com.FluffyTerror.Umagramm_Backend.models.chat.Chat;
 import com.FluffyTerror.Umagramm_Backend.models.chatMember.ChatMember;
@@ -106,6 +107,7 @@ public class ChatService {
                             Chat chat = new Chat();
                             chat.setId(UUID.randomUUID().toString());
                             chat.setChatType(ChatType.PRIVATE);
+                            chat.markNew();
 
                             return chatRepository.save(chat)
                                     .flatMap(savedChat -> {
@@ -113,7 +115,7 @@ public class ChatService {
                                         ChatMember m1 = createMember(savedChat.getId(), creatorId);
                                         ChatMember m2 = createMember(savedChat.getId(), partnerId);
 
-                                        return chatMemberRepository.saveAll(List.of(m1, m2))
+                                        return chatMemberRepository.saveAll(Flux.just(m1, m2))
                                                 .then(Mono.just(savedChat));
                                     });
                         })
@@ -125,7 +127,9 @@ public class ChatService {
         ChatMember member = new ChatMember();
         member.setChatId(chatId);
         member.setUserId(userId);
+        member.setRole(MemberRole.MEMBER); // Убедись, что это поле есть в БД
         member.setJoinedAt(LocalDateTime.now());
+        member.setNew(true); // Явно говорим, что это INSERT
         return member;
     }
 

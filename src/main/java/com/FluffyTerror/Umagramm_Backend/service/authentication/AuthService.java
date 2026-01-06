@@ -22,6 +22,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
@@ -40,9 +41,9 @@ public class AuthService {
     public Mono<RegisterResponse> register(RegisterRequest request, FilePart photo) {
         return users.existsByUsername(request.username())
                 .flatMap(exists -> {
-//                    if (exists) {
-//                        return Mono.error(new UserAlreadyExistsException("Username already exists"));
-//                    }
+                    if (exists) {
+                        return Mono.error(new UserAlreadyExistsException("Username already exists"));
+                    }
 
                     // Подготавливаем ID пользователя заранее
                     String userId = UUID.randomUUID().toString();
@@ -78,7 +79,7 @@ public class AuthService {
                                 String placeholderCode = "TEMP_CODE";
 
                                 return users.save(user)
-                                        .then(authRepo.save(auth))
+                                        .doOnSuccess(User::markNotNew)
                                         .then(refreshTokenService.create(UUID.fromString(user.getId())))
                                         .map(rt -> new RegisterResponse(
                                                 rt.getToken(),
@@ -118,7 +119,8 @@ public class AuthService {
                         users.findById(String.valueOf(rt.getUserId()))
                                 .map(user -> new RefreshResponse(
                                         jwtService.generateAccessToken(user),
-                                        LocalDateTime.from(Instant.now().plus(30,ChronoUnit.MINUTES))
+                                        rt.getToken(),
+                                        LocalDateTime.ofInstant(Instant.now().plus(30, ChronoUnit.MINUTES), ZoneId.systemDefault())
                                 ))
                 );
     }

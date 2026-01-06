@@ -12,13 +12,16 @@ spring:
     baseline-on-migrate: true
   springdoc:
     default-produces-media-type: application/json
+  logging:
+    level:
+      org.springframework.web: DEBUG
 
 
 application:
   security:
     jwt:
-      secret: ${JWT_SECRET:dev-secret-change-me}
-      access-token-ttl: 30m
+      secret: ${JWT_SECRET:533c1a7b-deaf-4313-a1b2-ef6c9e34920f}
+      access-token-ttl: 1h
       refresh-token-ttl: 60d
 
   file:

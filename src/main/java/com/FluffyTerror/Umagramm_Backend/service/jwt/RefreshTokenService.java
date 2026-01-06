@@ -23,7 +23,6 @@ public class RefreshTokenService {
 
     public Mono<RefreshToken> create(UUID userId) {
         RefreshToken rt = new RefreshToken();
-        rt.setId(UUID.randomUUID());
         rt.setUserId(userId);
         rt.setToken(UUID.randomUUID().toString());
         rt.setExpiresAt(Instant.now().plus(refreshTtlDays));

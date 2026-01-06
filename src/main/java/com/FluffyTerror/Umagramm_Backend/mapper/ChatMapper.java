@@ -34,13 +34,11 @@ public class ChatMapper {
 
         return ChatResponse.builder()
                 .id(chat.getId())
-                .name(chat.getTitle())
+                .name(chatName)
                 .unreadCount(unreadCount)
                 .lastMessage(content)
                 .lastMessageTime(time)
                 .isRecipientOnline(isRecipientOnline)
-                .senderId(chat.getSenderId())
-                .receiverId(chat.getRecipientId())
                 .build();
     }
 }

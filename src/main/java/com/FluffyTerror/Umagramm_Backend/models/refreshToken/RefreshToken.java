@@ -7,9 +7,9 @@ import org.springframework.data.relational.core.mapping.Table;
 import java.time.Instant;
 import java.util.UUID;
 
-@Table("refresh_token")
+@Table("refresh_tokens")
 @Data
-public class RefreshToken {
+public class RefreshToken  {
 
     @Id
     private UUID id;
