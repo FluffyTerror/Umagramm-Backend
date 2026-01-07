@@ -15,30 +15,5 @@ import java.time.LocalDateTime;
 public class ChatMapper {
 
 
-    public ChatResponse toChatResponse(Chat chat,
-                                       String chatName,
-                                       Long unreadCount,
-                                       Message lastMessage,
-                                       Boolean isRecipientOnline) {
 
-        String content = null;
-        LocalDateTime time = null;
-
-
-        if (lastMessage != null && lastMessage.getId() != null) {
-            time = lastMessage.getCreatedDate();
-            content = (lastMessage.getMessageType() == MessageType.TEXT)
-                    ? lastMessage.getContent()
-                    : "Attachment";
-        }
-
-        return ChatResponse.builder()
-                .id(chat.getId())
-                .name(chatName)
-                .unreadCount(unreadCount)
-                .lastMessage(content)
-                .lastMessageTime(time)
-                .isRecipientOnline(isRecipientOnline)
-                .build();
-    }
 }

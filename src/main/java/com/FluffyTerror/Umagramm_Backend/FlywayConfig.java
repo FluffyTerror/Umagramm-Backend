@@ -23,6 +23,7 @@ public class FlywayConfig {
                 .dataSource(url, user, password)
                 .locations("classpath:db/migration")
                 .baselineOnMigrate(true)
+                .validateMigrationNaming(true)
                 .load();
     }
 

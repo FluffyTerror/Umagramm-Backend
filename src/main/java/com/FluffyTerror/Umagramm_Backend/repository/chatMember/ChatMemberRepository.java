@@ -21,6 +21,7 @@ public interface ChatMemberRepository extends ReactiveCrudRepository<ChatMember,
         WHERE c.type = 'PRIVATE' 
         AND cm1.user_id = :user1 
         AND cm2.user_id = :user2
+        LIMIT 1
     """)
     Mono<Chat> findCommonPrivateChat(String user1, String user2);
 }

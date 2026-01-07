@@ -1,22 +1,17 @@
 package com.FluffyTerror.Umagramm_Backend.responses.chat;
 
-import lombok.*;
+
 
 import java.time.LocalDateTime;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-public class ChatResponse {
-    private String id;
-    private String name;
-    private Long unreadCount;
-    private String lastMessage;
-    private LocalDateTime lastMessageTime;
-    private boolean isRecipientOnline;
-    private String senderId;
-    private String receiverId;
+public record ChatResponse (
+         String id,
+         String senderId,
+         String receiverId,
+         String type,
+         Long unreadCount,
+         String lastMessage,
+         LocalDateTime lastMessageTime,
+         boolean isRecipientOnline
 
-}
+){}

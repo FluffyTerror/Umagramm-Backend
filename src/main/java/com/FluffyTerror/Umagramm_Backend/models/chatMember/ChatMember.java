@@ -6,6 +6,7 @@ import lombok.Setter;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;
 import org.springframework.data.domain.Persistable;
+import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.LocalDateTime;
@@ -18,6 +19,7 @@ public class ChatMember implements Persistable<Long> {
     private Long id;
     private String chatId;
     private String userId;
+    @Column("member_role")
     private MemberRole role; // ADMIN (может удалять), MEMBER (просто пишет)
     private LocalDateTime joinedAt;
 

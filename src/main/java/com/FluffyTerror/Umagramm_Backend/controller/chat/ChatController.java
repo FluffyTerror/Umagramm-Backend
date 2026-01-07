@@ -26,28 +26,22 @@ public class ChatController {
      * Наш собственный ID берется из Authentication.
      */
     @PostMapping("/private")
-    public Mono<ResponseEntity<StringResponse>> createPrivateChat(
+    public Mono<ChatResponse> createPrivateChat(
             @RequestParam(name = "receiver-id") String receiverId,
             Authentication authentication
     ) {
         User user = (User) authentication.getPrincipal();
-        String currentUserId = user.getId();
-        return chatService.createPrivateChat(currentUserId, receiverId)
-                .map(chatId -> ResponseEntity.ok(
-                        StringResponse.builder()
-                                .response(chatId)
-                                .build()
-                ));
+        return chatService.createPrivateChat(user.getId(), receiverId);
     }
 
     /**
      * Получение всех чатов текущего пользователя (и личных, и групп).
      */
-    @GetMapping("/by-user")
-    public Mono<ResponseEntity<List<ChatResponse>>> getUserChats(Authentication authentication) {
-        String currentUserId = authentication.getName();
-        return chatService.getUserChats(currentUserId)
-                .collectList() // Превращаем Flux в Mono<List>
-                .map(ResponseEntity::ok);
-    }
+//    @GetMapping("/by-user")
+//    public Mono<ResponseEntity<List<ChatResponse>>> getUserChats(Authentication authentication) {
+//        String currentUserId = authentication.getName();
+//        return chatService.getUserChats(currentUserId)
+//                .collectList() // Превращаем Flux в Mono<List>
+//                .map(ResponseEntity::ok);
+//    }
 }

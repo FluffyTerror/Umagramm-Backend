@@ -15,6 +15,7 @@ import com.FluffyTerror.Umagramm_Backend.responses.chat.ChatResponse;
 import com.FluffyTerror.Umagramm_Backend.mapper.ChatMapper;
 import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,69 +25,80 @@ import reactor.core.publisher.Mono;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-
+@Slf4j
 @Service
-@RequiredArgsConstructor // Используем для чистоты кода вместо @AllArgsConstructor
+@RequiredArgsConstructor
 public class ChatService {
     private final ChatRepository chatRepository;
-    private final ChatMemberRepository chatMemberRepository; // Новый репозиторий
-    private final ChatMapper chatMapper;
+    private final ChatMemberRepository chatMemberRepository;
     private final UserRepository userRepository;
     private final MessageRepository messageRepository;
 
     /**
-     * Получает список всех чатов пользователя (и личных, и групповых)
+     * Создает новый ПРИВАТНЫЙ чат или возвращает существующий с полной информацией
      */
-    public Flux<ChatResponse> getUserChats(String currentUserId) {
-        // Находим все записи об участии пользователя в чатах
-        return chatMemberRepository.findAllByUserId(currentUserId)
-                .flatMap(member -> chatRepository.findById(member.getChatId()))
-                .flatMap(chat -> enrichChatWithDetails(chat, currentUserId));
+    @Transactional
+    public Mono<ChatResponse> createPrivateChat(String creatorId, String partnerId) {
+        return chatMemberRepository.findCommonPrivateChat(creatorId, partnerId)
+                .switchIfEmpty(Mono.defer(() -> createNewChat(creatorId, partnerId)))
+                .flatMap(chat -> enrichChatWithDetails(chat, creatorId))
+                .doOnError(e -> log.error("Ошибка при создании/получении чата: ", e));
     }
 
     /**
-     * Обогащает базовый объект Chat данными для отображения (имя, последнее сообщение и т.д.)
+     * Внутренний метод только для создания записей в БД
+     */
+    private Mono<Chat> createNewChat(String creatorId, String partnerId) {
+        Chat chat = new Chat();
+        chat.setId(UUID.randomUUID().toString());
+        chat.setChatType(ChatType.PRIVATE);
+        chat.markNew();
+
+        return chatRepository.save(chat)
+                .flatMap(savedChat -> {
+                    ChatMember m1 = createMember(savedChat.getId(), creatorId);
+                    ChatMember m2 = createMember(savedChat.getId(), partnerId);
+                    return chatMemberRepository.save(m1)
+                            .then(chatMemberRepository.save(m2))
+                            .thenReturn(savedChat);
+                });
+    }
+
+    /**
+     * Маппинг Chat -> ChatResponse без использования сторонних мапперов
      */
     private Mono<ChatResponse> enrichChatWithDetails(Chat chat, String currentUserId) {
-        // Для личного чата нам нужен ID собеседника для статуса "Online"
-        Mono<String> partnerIdMono = (chat.getChatType() == ChatType.PRIVATE)
-                ? getPartnerId(chat.getId(), currentUserId)
-                : Mono.just(""); // Для групп ID собеседника не применим
+        return getPartnerId(chat.getId(), currentUserId)
+                .defaultIfEmpty("")
+                .flatMap(partnerId ->
+                        // Сначала получаем данные, которые всегда есть
+                        Mono.zip(
+                                getUnreadMessages(chat.getId(), currentUserId),
+                                isPartnerOnline(partnerId, chat.getChatType())
+                        ).flatMap(tuple ->
+                                // Затем подмешиваем сообщение, которое может отсутствовать
+                                getLastMessage(chat.getId())
+                                        .map(msg -> createResponse(chat, currentUserId, partnerId, tuple.getT1(), tuple.getT2(), msg))
+                                        .defaultIfEmpty(createResponse(chat, currentUserId, partnerId, tuple.getT1(), tuple.getT2(), null))
+                        )
+                );
+    }
 
-        return partnerIdMono.flatMap(partnerId ->
-                Mono.zip(
-                        getChatName(chat, currentUserId),                // Название (Имя друга или Название группы)
-                        getUnreadMessages(chat.getId(), currentUserId),   // Непрочитанные
-                        getLastMessage(chat.getId()),                     // Последнее сообщение
-                        isPartnerOnline(partnerId, chat.getChatType())        // Статус "В сети"
-                ).map(tuple -> chatMapper.toChatResponse(
-                        chat,
-                        tuple.getT1(), // name
-                        tuple.getT2(), // unread
-                        tuple.getT3(), // lastMsg
-                        tuple.getT4()  // online
-                ))
+    private ChatResponse createResponse(Chat chat, String senderId, String receiverId, Long unread, Boolean online, Message msg) {
+        return new ChatResponse(
+                chat.getId(),
+                senderId,
+                receiverId,
+                chat.getChatType().name(),
+                unread,
+                msg != null ? msg.getContent() : null,
+                msg != null ? msg.getCreatedDate() : null,
+                online
         );
     }
 
-    /**
-     * Определяет название чата в зависимости от его типа
-     */
-    public Mono<String> getChatName(Chat chat, String currentUserId) {
-        if (chat.getChatType() == ChatType.GROUP) {
-            return Mono.just(chat.getTitle() != null ? chat.getTitle() : "Group Chat");
-        }
+    // --- Вспомогательные методы остаются почти такими же ---
 
-        // Для личного чата ищем имя "другого" человека
-        return getPartnerId(chat.getId(), currentUserId)
-                .flatMap(userRepository::findById)
-                .map(u -> u.getFirstName() + " " + u.getLastName())
-                .defaultIfEmpty("Unknown User");
-    }
-
-    /**
-     * Находит ID собеседника в приватном чате
-     */
     private Mono<String> getPartnerId(String chatId, String currentUserId) {
         return chatMemberRepository.findAllByChatId(chatId)
                 .filter(member -> !member.getUserId().equals(currentUserId))
@@ -94,49 +106,9 @@ public class ChatService {
                 .map(ChatMember::getUserId);
     }
 
-    /**
-     * Создает новый ПРИВАТНЫЙ чат между двумя пользователями
-     */
-    @Transactional
-    public Mono<String> createPrivateChat(String creatorId, String partnerId) {
-        // 1. Проверяем, существует ли уже такой приватный чат
-        return chatMemberRepository.findCommonPrivateChat(creatorId, partnerId)
-                .switchIfEmpty(
-                        // 2. Если нет, создаем новый чат
-                        Mono.defer(() -> {
-                            Chat chat = new Chat();
-                            chat.setId(UUID.randomUUID().toString());
-                            chat.setChatType(ChatType.PRIVATE);
-                            chat.markNew();
-
-                            return chatRepository.save(chat)
-                                    .flatMap(savedChat -> {
-                                        // 3. Создаем записи для обоих участников
-                                        ChatMember m1 = createMember(savedChat.getId(), creatorId);
-                                        ChatMember m2 = createMember(savedChat.getId(), partnerId);
-
-                                        return chatMemberRepository.saveAll(Flux.just(m1, m2))
-                                                .then(Mono.just(savedChat));
-                                    });
-                        })
-                )
-                .map(Chat::getId);
-    }
-
-    private ChatMember createMember(String chatId, String userId) {
-        ChatMember member = new ChatMember();
-        member.setChatId(chatId);
-        member.setUserId(userId);
-        member.setRole(MemberRole.MEMBER); // Убедись, что это поле есть в БД
-        member.setJoinedAt(LocalDateTime.now());
-        member.setNew(true); // Явно говорим, что это INSERT
-        return member;
-    }
-
-
-
     public Mono<Long> getUnreadMessages(String chatId, String currentUserId) {
-        return messageRepository.countUnreadMessages(chatId, currentUserId, MessageState.SENT);
+        return messageRepository.countUnreadMessages(chatId, currentUserId, MessageState.SENT)
+                .defaultIfEmpty(0L);
     }
 
     public Mono<Message> getLastMessage(String chatId) {
@@ -148,5 +120,36 @@ public class ChatService {
         return userRepository.findById(partnerId)
                 .map(User::isOnline)
                 .defaultIfEmpty(false);
+    }
+
+    private ChatMember createMember(String chatId, String userId) {
+        ChatMember member = new ChatMember();
+        member.setChatId(chatId);
+        member.setUserId(userId);
+        member.setRole(MemberRole.MEMBER);
+        member.setJoinedAt(LocalDateTime.now());
+        member.setNew(true);
+        return member;
+    }
+    /**
+     * Определяет название чата для конкретного пользователя.
+     * Для групп — это заголовок группы.
+     * Для личных чатов — это имя и фамилия собеседника.
+     */
+    public Mono<String> getChatName(Chat chat, String currentUserId) {
+        if (chat.getChatType() == ChatType.GROUP) {
+            return Mono.just(chat.getTitle() != null ? chat.getTitle() : "Group Chat");
+        }
+
+        // Для личного чата ищем имя "другого" человека
+        return getPartnerId(chat.getId(), currentUserId)
+                .flatMap(userRepository::findById)
+                .map(u -> {
+                    String firstName = u.getFirstName() != null ? u.getFirstName() : "";
+                    String lastName = u.getLastName() != null ? u.getLastName() : "";
+                    String full = (firstName + " " + lastName).trim();
+                    return full.isEmpty() ? "Unknown User" : full;
+                })
+                .defaultIfEmpty("Unknown User");
     }
 }
