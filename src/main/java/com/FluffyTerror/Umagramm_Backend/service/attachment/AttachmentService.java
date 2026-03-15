@@ -1,8 +1,14 @@
 package com.FluffyTerror.Umagramm_Backend.service.attachment;
 
-import lombok.RequiredArgsConstructor;
+import com.FluffyTerror.Umagramm_Backend.enums.MessageType;
+import com.FluffyTerror.Umagramm_Backend.repository.attachment.AttachmentRepository;
+
+
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.UrlResource; // Если решишь использовать URL вместо путей
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
@@ -11,10 +17,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-@Service
+
 @Slf4j
-@RequiredArgsConstructor
+@Service
 public class AttachmentService {
+    public AttachmentService(
+            AttachmentRepository attachmentRepository,
+            @Value("${application.file.uploads.media-output-path}") String fileUploadPath
+    ) {
+        this.attachmentRepository = attachmentRepository;
+        this.fileUploadPath = fileUploadPath;
+    }
+
+    private final AttachmentRepository attachmentRepository;
     @Value("${application.file.uploads.media-output-path}")
     private String fileUploadPath;
 
@@ -28,30 +43,21 @@ public class AttachmentService {
                 .thenReturn(target.toString());
     }
 
-    //    private String uploadFile(@NonNull MultipartFile sourceFile,@NonNull String fileUploadSubPath) {
-//        final String finalUploadPath = fileUploadPath + File.separator + fileUploadSubPath;
-//        File targetFolder = new File(finalUploadPath);
-//
-//        if(!targetFolder.exists()){
-//            boolean folderCreated = targetFolder.mkdirs();
-//            if (!folderCreated){
-//                log.warn("failed to create target folder, {}",targetFolder);
-//                return null;
-//            }
-//        }
-//        final String fileExtension = getFileExtension(sourceFile.getOriginalFilename());
-//        String targetFilePath = finalUploadPath + File.separator + currentTimeMillis() + fileExtension;
-//        Path targetPath = Paths.get(targetFilePath);
-//        try{
-//            Files.write(targetPath,sourceFile.getBytes());
-//            log.info("File saved to {}",targetPath);
-//            return targetFilePath;
-//        } catch (IOException e) {
-//            log.error("Error saving a file with extension {}", fileExtension);
-//            log.error("Failed to save file",e);
-//        }
-//        return null;
-//    }
+    public Mono<Resource> getAttachment(Long attachmentId){
+        return attachmentRepository.findById(attachmentId).switchIfEmpty(Mono.error(new RuntimeException("Attachment not found")))
+                .map(attachment -> {
+                    // Путь к файлу, который мы сохраняли ранее (например, "uploads/abc.jpg")
+                    Path path = Paths.get(attachment.getUrl());
+
+                    if (!Files.exists(path)) {
+                        throw new RuntimeException("File not found on disk: " + attachment.getUrl());
+                    }
+
+                    return new FileSystemResource(path);
+                });
+
+
+    }
     private Mono<String> uploadFile(FilePart filePart, String subPath) {
         String filename = System.currentTimeMillis() + "_" + filePart.filename();
         Path target = Paths.get(fileUploadPath, subPath, filename);

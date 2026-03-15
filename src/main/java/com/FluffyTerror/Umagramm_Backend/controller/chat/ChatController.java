@@ -39,8 +39,8 @@ public class ChatController {
      */
 //    @GetMapping("/by-user")
 //    public Mono<ResponseEntity<List<ChatResponse>>> getUserChats(Authentication authentication) {
-//        String currentUserId = authentication.getName();
-//        return chatService.getUserChats(currentUserId)
+//         User user = (User) authentication.getPrincipal();
+//        return chatService.getUserChats(user.getId())
 //                .collectList() // Превращаем Flux в Mono<List>
 //                .map(ResponseEntity::ok);
 //    }

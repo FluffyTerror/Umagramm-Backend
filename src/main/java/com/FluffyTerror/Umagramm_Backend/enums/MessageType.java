@@ -6,5 +6,6 @@ public enum MessageType {
     AUDIO,
     VIDEO,
     FILE,
+    DOCUMENT,
     MIXED
 }

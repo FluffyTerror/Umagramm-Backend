@@ -27,13 +27,13 @@ public class SecurityConfig {
     @Bean
     public SecurityWebFilterChain securityFilterChain(ServerHttpSecurity http){
         return http
-                // 1. Настройка CORS (использует ваш бин corsFilter)
+                // 1. Настройка CORS
                 .cors(Customizer.withDefaults())
-                // 2. Отключаем CSRF (для Stateless API это норма)
+                // 2. Отключаем CSRF
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 // 3. Настройка доступов
                 .authorizeExchange(auth -> auth
-                        // Разрешаем регистрацию и логин (добавьте свои пути!)
+                        // Разрешаем регистрацию и логин
                         .pathMatchers("/api/v1/auth/register", "/api/v1/auth/login","/api/v1/auth/nigga").permitAll()
                         // Разрешаем Swagger и Refresh
                         .pathMatchers(
@@ -43,6 +43,8 @@ public class SecurityConfig {
                                 "/swagger-ui.html",
                                 "/webjars/**"
                         ).permitAll()
+                        .pathMatchers("/ws/**").permitAll()// Разрешаю хендшейк, токен проверяю внутри Handler
+                        .pathMatchers("/api/v1/attachments/**").permitAll()
                         // Все остальное — только по токену
                         .anyExchange().authenticated()
                 )

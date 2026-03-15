@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
@@ -33,12 +34,12 @@ public class MessageController {
     @PostMapping(value = "/upload-media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     public Mono<Void> upload(
-            @RequestPart("file") FilePart file,
+            @RequestPart("files") Flux<FilePart> files,
             @Parameter()
             @RequestPart("chatId") String chatId,
             Authentication authentication
     ) {
-        return messageService.uploadMediaMessage(chatId, file, authentication);
+        return messageService.uploadMediaMessage(chatId, files, authentication);
     }
 
     @PatchMapping

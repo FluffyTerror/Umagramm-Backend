@@ -7,7 +7,7 @@ import org.springframework.data.relational.core.mapping.Table;
 import java.time.LocalDateTime;
 
 @Data
-@Table("user_auth")
+@Table("user_rc_code")
 public class UserRecoveryCode {
 
     @Id
