@@ -5,7 +5,7 @@ import com.FluffyTerror.Umagramm_Backend.exceptions.UserAlreadyExistsException;
 import com.FluffyTerror.Umagramm_Backend.models.attachment.Attachment;
 import com.FluffyTerror.Umagramm_Backend.models.user.User;
 import com.FluffyTerror.Umagramm_Backend.models.userAuth.UserRecoveryCode;
-import com.FluffyTerror.Umagramm_Backend.repository.userAuth.UserAuthRepository;
+import com.FluffyTerror.Umagramm_Backend.repository.userAuth.UserRecoveryCodeRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.attachment.AttachmentRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.user.UserRepository;
 import com.FluffyTerror.Umagramm_Backend.requests.authentication.RegisterRequest;
@@ -32,7 +32,7 @@ import java.util.UUID;
 public class AuthService {
 
     private final UserRepository users;
-    private final UserAuthRepository authRepo;
+    private final UserRecoveryCodeRepository authRepo;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final AttachmentService attachmentService;
