@@ -3,7 +3,6 @@ package com.FluffyTerror.Umagramm_Backend.websockets;
 import com.FluffyTerror.Umagramm_Backend.service.jwt.JwtService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.socket.CloseStatus;
 import org.springframework.web.reactive.socket.WebSocketHandler;

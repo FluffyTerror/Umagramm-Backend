@@ -4,7 +4,6 @@ import lombok.Data;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Table;
 
-import java.time.LocalDateTime;
 
 @Data
 @Table("user_rc_code")
@@ -15,5 +14,7 @@ public class UserRecoveryCode {
 
     private String recoveryCodeHash;
 
-    private LocalDateTime lastLogin;
+    private String salt;
+
+    private String encryptedPrivateKey;
 }

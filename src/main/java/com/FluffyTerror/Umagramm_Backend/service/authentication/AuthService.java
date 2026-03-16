@@ -5,11 +5,10 @@ import com.FluffyTerror.Umagramm_Backend.exceptions.UserAlreadyExistsException;
 import com.FluffyTerror.Umagramm_Backend.models.attachment.Attachment;
 import com.FluffyTerror.Umagramm_Backend.models.user.User;
 import com.FluffyTerror.Umagramm_Backend.models.userAuth.UserRecoveryCode;
-import com.FluffyTerror.Umagramm_Backend.repository.userAuth.UserAuthRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.attachment.AttachmentRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.user.UserRepository;
+import com.FluffyTerror.Umagramm_Backend.repository.userAuth.UserRecoveryCodeRepository;
 import com.FluffyTerror.Umagramm_Backend.requests.authentication.RegisterRequest;
-import com.FluffyTerror.Umagramm_Backend.responses.authentication.AuthResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.authentication.RefreshResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.authentication.RegisterResponse;
 import com.FluffyTerror.Umagramm_Backend.service.attachment.AttachmentService;
@@ -18,9 +17,11 @@ import com.FluffyTerror.Umagramm_Backend.service.jwt.RefreshTokenService;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -32,98 +33,70 @@ import java.util.UUID;
 public class AuthService {
 
     private final UserRepository users;
-    private final UserAuthRepository authRepo;
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final AttachmentService attachmentService;
     private final AttachmentRepository attachmentRepository;
-    // private final RecoveryCodeService recoveryCodeService; //
+    private final PasswordEncoder passwordEncoder;
+    private final UserRecoveryCodeRepository userRecoveryCodeRepository;
 
     public Mono<@NonNull RegisterResponse> register(RegisterRequest request, FilePart photo) {
-        return users.existsByUsername(request.username())
-                .flatMap(exists -> {
-                    if (exists) {
-                        return Mono.error(new UserAlreadyExistsException("Username already exists"));
-                    }
+        return users.existsByUsername(request.username()).flatMap(exists -> {
+            if (exists) {
+                return Mono.error(new UserAlreadyExistsException("Username already exists"));
+            }
+            // Подготавливаем ID пользователя заранее
+            String userId = UUID.randomUUID().toString();
 
-                    // Подготавливаем ID пользователя заранее
-                    String userId = UUID.randomUUID().toString();
+            // Если фото передано, запускаем цепочку сохранения файла
+            Mono<Long> photoIdMono = (photo != null) ? attachmentService.saveFile(photo, userId).flatMap(filePath -> {
+                Attachment attachment = new Attachment();
+                attachment.setUrl(filePath);
+                attachment.setType(MessageType.IMAGE);
+                // messageId остается null, так как это аватар
+                return attachmentRepository.save(attachment);
+            }).map(Attachment::getId) : Mono.justOrEmpty(java.util.Optional.empty());
 
-                    // Если фото передано, запускаем цепочку сохранения файла
-                    Mono<Long> photoIdMono = (photo != null)
-                            ? attachmentService.saveFile(photo, userId)
-                            .flatMap(filePath -> {
-                                Attachment attachment = new Attachment();
-                                attachment.setUrl(filePath);
-                                attachment.setType(MessageType.IMAGE);
-                                // messageId остается null, так как это аватар
-                                return attachmentRepository.save(attachment);
-                            })
-                            .map(Attachment::getId)
-                            : Mono.justOrEmpty(java.util.Optional.empty());
+            // Собираем всё вместе
+            return photoIdMono.defaultIfEmpty(0L) // Заглушка, если фото нет
+                    .flatMap(photoId -> {
+                        User user = new User();
+                        user.setId(userId);
+                        user.setUsername(request.username());
+                        user.setFirstName(request.firstName());
+                        user.setLastName(request.lastName());
+                        if (photoId != 0L) {
+                            user.setProfilePhotoId(photoId);
+                        }
 
-                    // Собираем всё вместе
-                    return photoIdMono.defaultIfEmpty(0L) // Заглушка, если фото нет
-                            .flatMap(photoId -> {
-                                User user = new User();
-                                user.setId(userId);
-                                user.setUsername(request.username());
-                                user.setFirstName(request.firstName());
-                                user.setLastName(request.lastName());
-                                if (photoId != 0L) {
-                                    user.setProfilePhotoId(photoId);
-                                }
+                        //чистый 16-значный код
+                        String rawRecoveryCode = generateRecoveryCode();
 
-                                UserRecoveryCode auth = new UserRecoveryCode();
-                                auth.setUserId(user.getId());
+                        String recoveryCodeHash = passwordEncoder.encode(rawRecoveryCode);
 
-                                String placeholderCode = "TEMP_CODE";
+                        UserRecoveryCode userRecoveryCode = new UserRecoveryCode();
+                        userRecoveryCode.setUserId(user.getId());
+                        userRecoveryCode.setRecoveryCodeHash(recoveryCodeHash);//-TODO Возможно пересмотреть логику шифрования ключа восстановления
 
-                                return users.save(user)
-                                        .doOnSuccess(User::markNotNew)
-                                        .then(refreshTokenService.create(UUID.fromString(user.getId())))
-                                        .map(rt -> new RegisterResponse(
-                                                rt.getToken(),
-                                                jwtService.generateAccessToken(user),
-                                                placeholderCode
-                                        ));
-                            });
-                });
-    }
-
-    public Mono<AuthResponse> recover(String username, String recoveryCode) {
-        return users.findByUsername(username)
-                .flatMap(user ->
-                        authRepo.findById(user.getId())
-                                /* .filter(auth ->
-                                        recoveryCodeService.matches(
-                                                recoveryCode,
-                                                auth.getRecoveryCodeHash()
-                                        )
-                                ) */ //
-                                .switchIfEmpty(Mono.error(new RuntimeException("Invalid credentials")))
-                                .flatMap(auth ->
-                                        refreshTokenService.create(UUID.fromString(user.getId()))
-                                                .map(rt -> new AuthResponse(
-                                                        rt.getToken(),
-                                                        jwtService.generateAccessToken(user),
-                                                        user.getUsername()
-                                                ))
-                                )
-                );
+                        return users.save(user).doOnSuccess(User::markNotNew).then(userRecoveryCodeRepository.save(userRecoveryCode)).then(refreshTokenService.create(UUID.fromString(user.getId()))).map(rt -> new RegisterResponse(rt.getToken(), jwtService.generateAccessToken(user), rawRecoveryCode));
+                    });
+        });
     }
 
     public Mono<RefreshResponse> refresh(String refreshToken) {
-        return refreshTokenService.validate(refreshToken)
-                .flatMap(refreshTokenService::rotate)
-                .flatMap(rt ->
-                        users.findById(String.valueOf(rt.getUserId()))
-                                .map(user -> new RefreshResponse(
-                                        jwtService.generateAccessToken(user),
-                                        rt.getToken(),
-                                        LocalDateTime.ofInstant(Instant.now().plus(30, ChronoUnit.MINUTES), ZoneId.systemDefault())
-                                ))
-                );
+        return refreshTokenService.validate(refreshToken).flatMap(refreshTokenService::rotate).flatMap(rt -> users.findById(String.valueOf(rt.getUserId())).map(user -> new RefreshResponse(jwtService.generateAccessToken(user), rt.getToken(), LocalDateTime.ofInstant(Instant.now().plus(30, ChronoUnit.MINUTES), ZoneId.systemDefault()))));
+    }
+
+    // Метод для генерации красивого и надежного кода (например: XXXX-XXXX-XXXX-XXXX)
+    private String generateRecoveryCode() {
+        String chars = "ABCDEFGHIJKLMNPQRSTUVWXYZ123456789";
+        SecureRandom random = new SecureRandom();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 16; i++) {
+            if (i > 0 && i % 4 == 0) sb.append("-");
+            sb.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return sb.toString();
     }
 }
 

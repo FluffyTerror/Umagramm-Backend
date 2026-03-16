@@ -5,5 +5,5 @@ import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface UserAuthRepository extends ReactiveCrudRepository<UserRecoveryCode,String> {
+public interface UserRecoveryCodeRepository extends ReactiveCrudRepository<UserRecoveryCode,String> {
 }
