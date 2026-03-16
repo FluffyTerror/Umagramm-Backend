@@ -12,7 +12,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class Notification {
+public class Notification {//DTO class!!!
     private String chatId;
     private String content;
     private String senderId;
