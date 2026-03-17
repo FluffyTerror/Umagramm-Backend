@@ -48,6 +48,7 @@ public class SecurityConfig {
                         ).permitAll()
                         .pathMatchers("/ws/**").permitAll()// Разрешаю хендшейк, токен проверяю внутри Handler
                         .pathMatchers("/api/v1/attachments/**").permitAll()
+                        .pathMatchers("/api/v1/recovery/restore-access").permitAll()
                         // Все остальное — только по токену
                         .anyExchange().authenticated()
                 )

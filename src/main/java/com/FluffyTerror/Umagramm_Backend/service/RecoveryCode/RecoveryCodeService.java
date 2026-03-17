@@ -28,12 +28,19 @@ public class RecoveryCodeService {
     private final UserRepository userRepository;
 
     public Mono<Void> finishRecoveryCode(String userId, FinishRecoveryCodeRequest request) {
-        return userRecoveryCodeRepository.findById(userId).switchIfEmpty(Mono.error(new NoRecoveryCodeException("Код восстановления для пользователя не найден. Завершите первый шаг регистрации."))).flatMap(recoveryCode -> {
-            // Кладем в сейф зашифрованный ключ и соль
-            recoveryCode.setEncryptedPrivateKey(request.encryptedPrivateKey());
-            recoveryCode.setSalt(request.salt());
-            return userRecoveryCodeRepository.save(recoveryCode);
-        }).then();
+        return userRecoveryCodeRepository.updateVaultData(
+                        userId,
+                        request.encryptedPrivateKey(),
+                        request.salt()
+                )
+                .flatMap(updatedRows -> {
+                    if (updatedRows == 0) {
+                        return Mono.error(new RuntimeException(
+                                "Сейф не найден. Выполните первый шаг регистрации."
+                        ));
+                    }
+                    return Mono.empty();
+                });
     }
 
     public Mono<RestoreResponse> restoreAccount(RestoreAccountRequest request) {

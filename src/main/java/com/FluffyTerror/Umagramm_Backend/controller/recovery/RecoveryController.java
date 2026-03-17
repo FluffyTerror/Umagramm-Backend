@@ -1,5 +1,6 @@
 package com.FluffyTerror.Umagramm_Backend.controller.recovery;
 
+import com.FluffyTerror.Umagramm_Backend.models.user.User;
 import com.FluffyTerror.Umagramm_Backend.requests.recovery.FinishRecoveryCodeRequest;
 import com.FluffyTerror.Umagramm_Backend.requests.recovery.RestoreAccountRequest;
 import com.FluffyTerror.Umagramm_Backend.responses.recovery.RestoreResponse;
@@ -21,8 +22,13 @@ public class RecoveryController {
     private final RecoveryCodeService recoveryCodeService;
 
     @PutMapping("/finish-recovery-code")
-    public Mono<ResponseEntity<Void>> completeRecoveryCode(@AuthenticationPrincipal Principal principal, @RequestBody FinishRecoveryCodeRequest request) {
-        return recoveryCodeService.finishRecoveryCode(principal.getName(), request).thenReturn(ResponseEntity.ok().build());
+    public Mono<ResponseEntity<Void>> completeRecoveryCode(
+            @AuthenticationPrincipal User user,
+            @RequestBody FinishRecoveryCodeRequest request
+    ) {
+        return recoveryCodeService
+                .finishRecoveryCode(user.getId(), request)
+                .thenReturn(ResponseEntity.ok().build());
     }
 
     @PostMapping("/restore-access")
