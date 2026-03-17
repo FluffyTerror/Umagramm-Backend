@@ -78,7 +78,18 @@ public class AuthService {
                         userRecoveryCode.setUserId(user.getId());
                         userRecoveryCode.setRecoveryCodeHash(recoveryCodeHash);//-TODO Возможно пересмотреть логику шифрования ключа восстановления
 
-                        return users.save(user).doOnSuccess(User::markNotNew).then(userRecoveryCodeRepository.save(userRecoveryCode)).then(refreshTokenService.create(UUID.fromString(user.getId()))).map(rt -> new RegisterResponse(rt.getToken(), jwtService.generateAccessToken(user), rawRecoveryCode));
+                        return users.save(user)
+                                .doOnSuccess(User::markNotNew)
+                                .then(
+                                        userRecoveryCodeRepository.save(userRecoveryCode)
+                                                .doOnSuccess(saved -> saved.setNew(false))
+                                )
+                                .then(refreshTokenService.create(UUID.fromString(user.getId())))
+                                .map(rt -> new RegisterResponse(
+                                        rt.getToken(),
+                                        jwtService.generateAccessToken(user),
+                                        rawRecoveryCode
+                                ));
                     });
         });
     }
