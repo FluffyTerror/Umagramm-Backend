@@ -22,8 +22,6 @@ public class ChatController {
 
     /**
      * Создание личного чата.
-     * Теперь нам нужен только ID того, с кем мы хотим начать чат.
-     * Наш собственный ID берется из Authentication.
      */
     @PostMapping("/private")
     public Mono<ChatResponse> createPrivateChat(

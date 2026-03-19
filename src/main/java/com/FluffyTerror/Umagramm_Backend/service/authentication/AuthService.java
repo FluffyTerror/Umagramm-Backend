@@ -95,7 +95,16 @@ public class AuthService {
     }
 
     public Mono<RefreshResponse> refresh(String refreshToken) {
-        return refreshTokenService.validate(refreshToken).flatMap(refreshTokenService::rotate).flatMap(rt -> users.findById(String.valueOf(rt.getUserId())).map(user -> new RefreshResponse(jwtService.generateAccessToken(user), rt.getToken(), LocalDateTime.ofInstant(Instant.now().plus(30, ChronoUnit.MINUTES), ZoneId.systemDefault()))));
+        return refreshTokenService.validate(refreshToken)
+                .flatMap(refreshTokenService::rotate)
+                .flatMap(rt ->
+                        users.findById(String.valueOf(rt.getUserId()))
+                                .map(user ->
+                                        new RefreshResponse(
+                                                jwtService.generateAccessToken(user),
+                                                rt.getToken(),
+                                                LocalDateTime.ofInstant(Instant.now().plus(30, ChronoUnit.MINUTES),
+                                                        ZoneId.systemDefault()))));
     }
 
     // Метод для генерации красивого и надежного кода (например: XXXX-XXXX-XXXX-XXXX)

@@ -11,6 +11,7 @@ import com.FluffyTerror.Umagramm_Backend.responses.recovery.RestoreResponse;
 import com.FluffyTerror.Umagramm_Backend.service.jwt.JwtService;
 import com.FluffyTerror.Umagramm_Backend.service.jwt.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -44,10 +45,10 @@ public class RecoveryCodeService {
     }
 
     public Mono<RestoreResponse> restoreAccount(RestoreAccountRequest request) {
-        return userRepository.findByUsername(request.username()).switchIfEmpty(Mono.error(new UserNotFoundException("Пользователь не найден"))).flatMap(user -> userRecoveryCodeRepository.findById(user.getId()).flatMap(vault -> {
+        return userRepository.findByUsername(request.username()).switchIfEmpty(Mono.error(new UserNotFoundException("User not found"))).flatMap(user -> userRecoveryCodeRepository.findById(user.getId()).flatMap(vault -> {
             // 1. Проверяем, подходит ли Пропуск к Печати в базе
             if (!passwordEncoder.matches(request.recoveryProof(), vault.getRecoveryCodeHash())) {
-                return Mono.error(new BadCredentialsException("Неверный код восстановления"));
+                return Mono.error(new BadCredentialsException("Wrong recovery code"));
             }
 
             // 2. Если всё верно, генерируем новые токены (как при логине)
