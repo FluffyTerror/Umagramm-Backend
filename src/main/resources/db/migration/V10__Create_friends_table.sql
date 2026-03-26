@@ -1,23 +1,16 @@
-CREATE TABLE friend_request(
+CREATE TABLE friends (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    sender_id VARCHAR(36) FOREIGN KEY REFERENCES users(id) ON DELETE CASCADE,
-    receiver_id VARCHAR(36) FOREIGN KEY REFERENCES users(id) ON DELETE CASCADE,
-    status VARCHAR(36) NOT NULL CHECK( status IN ('ACCEPTED','PENDING','DECLINED'))
-    created_at TIMESTAMP DEFAULT now(),
-    updated_at TIMESTAMP
-
-    CONSTRAINT check_not_self CHECK (sender_id <> receiver_id),
-    CONSTRAINT unique_request UNIQUE (sender_id, receiver_id)
+    sender_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    receiver_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status VARCHAR(20) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Accepted', 'Declined')),
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    CONSTRAINT check_not_self CHECK (sender_id <> receiver_id)
 );
 
-CREATE TABLE friends(
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    sender_id VARCHAR(36) FOREIGN KEY REFERENCES users(id) ON DELETE CASCADE,
-    receiver_id VARCHAR(36) FOREIGN KEY REFERENCES users(id) ON DELETE CASCADE,
-    friends_since TIMESTAMP NOT NULL DEFAULT now(),
-    CONSTRAINT check_not_self CHECK (sender_id <> receiver_id),
-        CONSTRAINT unique_friendship UNIQUE (
-            LEAST(user1_id, user2_id),
-            GREATEST(user1_id, user2_id)
-        )
-)
+-- 2. Создаем УНИКАЛЬНЫЙ ИНДЕКС для проверки пары (А-Б и Б-А)
+-- Важно: в Postgres выражения в индексах должны быть в дополнительных скобках
+CREATE UNIQUE INDEX unique_friend_pair_idx ON friends (
+    (LEAST(sender_id, receiver_id)), 
+    (GREATEST(sender_id, receiver_id))
+);

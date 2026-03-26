@@ -15,7 +15,10 @@ spring:
   logging:
     level:
       org.springframework.web: DEBUG
-
+  data:
+    redis:
+      host: localhost # когда бэк будет тоже в докере - поменять
+      port: 6379
 
 application:
   security:
