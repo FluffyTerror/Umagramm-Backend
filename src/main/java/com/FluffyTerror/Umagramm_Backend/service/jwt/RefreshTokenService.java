@@ -1,5 +1,6 @@
 package com.FluffyTerror.Umagramm_Backend.service.jwt;
 
+import com.FluffyTerror.Umagramm_Backend.exceptions.InvalidRefreshTokenException;
 import com.FluffyTerror.Umagramm_Backend.models.refreshToken.RefreshToken;
 import com.FluffyTerror.Umagramm_Backend.repository.refreshToken.RefreshTokenRepository;
 import lombok.RequiredArgsConstructor;
@@ -9,7 +10,6 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Service
@@ -34,7 +34,7 @@ public class RefreshTokenService {
     public Mono<RefreshToken> validate(String token) {
         return repo.findByTokenAndRevokedFalse(token)
                 .filter(rt -> rt.getExpiresAt().isAfter(Instant.now()))
-                .switchIfEmpty(Mono.error(new RuntimeException("Invalid refresh token")));
+                .switchIfEmpty(Mono.error(new InvalidRefreshTokenException("Invalid refresh token")));
     }
 
     public Mono<RefreshToken> rotate(RefreshToken oldToken) {

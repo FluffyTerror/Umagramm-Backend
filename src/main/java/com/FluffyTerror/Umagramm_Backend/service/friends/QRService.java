@@ -4,6 +4,7 @@ import com.FluffyTerror.Umagramm_Backend.exceptions.TokenForQRCodeExpiredExcepti
 import com.FluffyTerror.Umagramm_Backend.responses.qr.QRResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
