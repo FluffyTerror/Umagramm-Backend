@@ -1,6 +1,7 @@
 package com.FluffyTerror.Umagramm_Backend.service.attachment;
 
 import com.FluffyTerror.Umagramm_Backend.enums.MessageType;
+import com.FluffyTerror.Umagramm_Backend.exceptions.FileNotFoundException;
 import com.FluffyTerror.Umagramm_Backend.repository.attachment.AttachmentRepository;
 
 
@@ -50,7 +51,7 @@ public class AttachmentService {
                     Path path = Paths.get(attachment.getUrl());
 
                     if (!Files.exists(path)) {
-                        throw new RuntimeException("File not found on disk: " + attachment.getUrl());
+                        throw new FileNotFoundException("File not found on disk: " + attachment.getUrl());
                     }
 
                     return new FileSystemResource(path);

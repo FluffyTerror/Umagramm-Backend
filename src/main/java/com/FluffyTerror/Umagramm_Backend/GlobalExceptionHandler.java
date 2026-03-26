@@ -92,6 +92,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                         ex.getMessage()
                 ));
     }
+
+    @ExceptionHandler(FileNotFoundException.class)
+    public ResponseEntity<ErrorResponse> formatFileNotFoundException(FileNotFoundException ex) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(new ErrorResponse(
+                        HttpStatus.NOT_FOUND.value(),
+                        ex.getMessage()
+                ));
+    }
+
     public record ErrorResponse(int status, String message) {
     }
 }
