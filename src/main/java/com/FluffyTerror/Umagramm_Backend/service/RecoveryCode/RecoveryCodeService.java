@@ -46,12 +46,12 @@ public class RecoveryCodeService {
 
     public Mono<RestoreResponse> restoreAccount(RestoreAccountRequest request) {
         return userRepository.findByUsername(request.username()).switchIfEmpty(Mono.error(new UserNotFoundException("User not found"))).flatMap(user -> userRecoveryCodeRepository.findById(user.getId()).flatMap(vault -> {
-            // 1. Проверяем, подходит ли Пропуск к Печати в базе
+
             if (!passwordEncoder.matches(request.recoveryProof(), vault.getRecoveryCodeHash())) {
                 return Mono.error(new BadCredentialsException("Wrong recovery code"));
             }
 
-            // 2. Если всё верно, генерируем новые токены (как при логине)
+
             return refreshTokenService.create(UUID.fromString(user.getId())).map(rt -> new RestoreResponse(jwtService.generateAccessToken(user), rt.getToken(), vault.getEncryptedPrivateKey(), vault.getSalt()));
         }));
     }

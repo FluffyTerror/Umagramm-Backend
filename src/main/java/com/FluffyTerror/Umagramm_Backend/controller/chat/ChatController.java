@@ -1,7 +1,7 @@
 package com.FluffyTerror.Umagramm_Backend.controller.chat;
 
 import com.FluffyTerror.Umagramm_Backend.models.user.User;
-import com.FluffyTerror.Umagramm_Backend.responses.StringResponse;
+
 import com.FluffyTerror.Umagramm_Backend.responses.chat.ChatResponse;
 import com.FluffyTerror.Umagramm_Backend.service.chat.ChatService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -11,7 +11,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
-import java.util.List;
+
 
 @RestController
 @RequiredArgsConstructor
