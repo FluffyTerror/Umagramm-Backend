@@ -45,52 +45,51 @@ public class AuthService {
             if (exists) {
                 return Mono.error(new UserAlreadyExistsException("Username already exists"));
             }
-            // Подготавливаем ID пользователя заранее
+
             String userId = UUID.randomUUID().toString();
 
-            // Если фото передано, запускаем цепочку сохранения файла
-            Mono<Long> photoIdMono = (photo != null) ? attachmentService.saveFile(photo, userId).flatMap(filePath -> {
-                Attachment attachment = new Attachment();
-                attachment.setUrl(filePath);
-                attachment.setType(MessageType.IMAGE);
-                // messageId остается null, так как это аватар
-                return attachmentRepository.save(attachment);
-            }).map(Attachment::getId) : Mono.justOrEmpty(java.util.Optional.empty());
+            // 1. Определяем ID фотографии: либо сохраняем новую, либо берем константу
+            Mono<Long> photoIdMono = (photo != null)
+                    ? attachmentService.saveFile(photo, userId)
+                    .flatMap(filePath -> {
+                        Attachment attachment = new Attachment();
+                        attachment.setUrl(filePath);
+                        attachment.setType(MessageType.IMAGE);
+                        return attachmentRepository.save(attachment);
+                    })
+                    .map(Attachment::getId)
+                    // Если фото не прислали, просто возвращаем ID 1 (наш эталон из БД)
+                    : Mono.just(1L);
 
-            // Собираем всё вместе
-            return photoIdMono.defaultIfEmpty(0L) // Заглушка, если фото нет
-                    .flatMap(photoId -> {
-                        User user = new User();
-                        user.setId(userId);
-                        user.setUsername(request.username());
-                        user.setFirstName(request.firstName());
-                        user.setLastName(request.lastName());
-                        if (photoId != 0L) {
-                            user.setProfilePhotoId(photoId);
-                        }
+            // 2. Основная цепочка регистрации
+            return photoIdMono.flatMap(photoId -> {
+                User user = new User();
+                user.setId(userId);
+                user.setUsername(request.username());
+                user.setFirstName(request.firstName());
+                user.setLastName(request.lastName());
 
-                        //чистый 16-значный код
-                        String rawRecoveryCode = generateRecoveryCode();
+                // Теперь photoId есть всегда (либо новый, либо 1L)
+                user.setProfilePhotoId(photoId);
 
-                        String recoveryCodeHash = passwordEncoder.encode(rawRecoveryCode);
+                String rawRecoveryCode = generateRecoveryCode();
+                String recoveryCodeHash = passwordEncoder.encode(rawRecoveryCode);
 
-                        UserRecoveryCode userRecoveryCode = new UserRecoveryCode();
-                        userRecoveryCode.setUserId(user.getId());
-                        userRecoveryCode.setRecoveryCodeHash(recoveryCodeHash);//-TODO Возможно пересмотреть логику шифрования ключа восстановления
+                UserRecoveryCode userRecoveryCode = new UserRecoveryCode();
+                userRecoveryCode.setUserId(user.getId());
+                userRecoveryCode.setRecoveryCodeHash(recoveryCodeHash);
 
-                        return users.save(user)
-                                .doOnSuccess(User::markNotNew)
-                                .then(
-                                        userRecoveryCodeRepository.save(userRecoveryCode)
-                                                .doOnSuccess(saved -> saved.setNew(false))
-                                )
-                                .then(refreshTokenService.create(UUID.fromString(user.getId())))
-                                .map(rt -> new RegisterResponse(
-                                        rt.getToken(),
-                                        jwtService.generateAccessToken(user),
-                                        rawRecoveryCode
-                                ));
-                    });
+                return users.save(user)
+                        .doOnSuccess(User::markNotNew)
+                        .then(userRecoveryCodeRepository.save(userRecoveryCode)
+                                .doOnSuccess(saved -> saved.setNew(false)))
+                        .then(refreshTokenService.create(UUID.fromString(user.getId())))
+                        .map(rt -> new RegisterResponse(
+                                rt.getToken(),
+                                jwtService.generateAccessToken(user),
+                                rawRecoveryCode
+                        ));
+            });
         });
     }
 
@@ -117,6 +116,15 @@ public class AuthService {
             sb.append(chars.charAt(random.nextInt(chars.length())));
         }
         return sb.toString();
+    }
+    private Mono<Long> createDefaultAvatar() {
+        Attachment attachment = new Attachment();
+        // Пишем только имя файла, как это делает attachmentService.saveFile
+        attachment.setUrl("default-avatar.jpg");
+        attachment.setType(MessageType.IMAGE);
+
+        return attachmentRepository.save(attachment)
+                .map(Attachment::getId);
     }
 }
 

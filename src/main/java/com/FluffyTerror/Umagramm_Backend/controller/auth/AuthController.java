@@ -27,7 +27,7 @@ public class AuthController {
     }
 
     @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public Mono<RegisterResponse> register(@RequestPart("data") RegisterRequest request, @RequestPart("file") FilePart filePart) {
+    public Mono<RegisterResponse> register(@RequestPart("data") RegisterRequest request, @RequestPart(value = "file", required = false) FilePart filePart) {
         return authService.register(request, filePart);
     }
 

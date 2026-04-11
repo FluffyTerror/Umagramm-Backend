@@ -48,4 +48,5 @@ public class AttachmentController {
         String filename = resource.getFilename() != null ? resource.getFilename() : "file";
         return dispositionType + "; filename=\"" + filename + "\"";
     }
+
 }

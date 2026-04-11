@@ -19,6 +19,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                         ex.getMessage())
                 );
     }
+    @ExceptionHandler(FriendNotFoundException.class)
+    private ResponseEntity<ErrorResponse> formatFriendNotFoundException(FriendNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(new ErrorResponse(
+                        HttpStatus.UNAUTHORIZED.value(),
+                        ex.getMessage())
+                );
+    }
+
     @ExceptionHandler(InvalidRefreshTokenException.class)
     private ResponseEntity<ErrorResponse> formatInvalidFreshTokenException(InvalidRefreshTokenException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)

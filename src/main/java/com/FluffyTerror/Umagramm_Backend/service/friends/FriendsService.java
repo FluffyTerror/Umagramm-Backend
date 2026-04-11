@@ -63,6 +63,9 @@ public class FriendsService {
                                         // Теперь у нас есть доступ к ОБОИМ объектам:
                                         senderUser.getId(),       // ID того, кто прислал
                                         senderUser.getUsername(), // Имя того, кто прислал
+                                        senderUser.getFirstName(),
+                                        senderUser.getLastName(),
+                                        senderUser.getProfilePhotoId(),
                                         friendRequest.getCreatedAt() // Дата из самой заявки
                                 ))
                 );

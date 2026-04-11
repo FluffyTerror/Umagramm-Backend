@@ -21,6 +21,13 @@ public interface UserRepository extends ReactiveCrudRepository<User, String> {
     @Query("SELECT * from users WHERE id = :userId")
     Mono<User> getUserById(String userId);
 
-
+    @Query("""
+    SELECT u.* FROM users u
+    JOIN friends f ON (u.id = f.sender_id OR u.id = f.receiver_id)
+    WHERE (f.sender_id = :currentUserId OR f.receiver_id = :currentUserId)
+      AND u.id != :currentUserId
+      AND f.status = 'Accepted'
+""")
+    Flux<User> findAllAcceptedFriends(String currentUserId);
 
 }

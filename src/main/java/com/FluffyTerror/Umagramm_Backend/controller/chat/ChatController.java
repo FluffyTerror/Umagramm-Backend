@@ -11,6 +11,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 
 
 @RestController
@@ -35,11 +36,11 @@ public class ChatController {
     /**
      * Получение всех чатов текущего пользователя (и личных, и групп).
      */
-//    @GetMapping("/by-user")
-//    public Mono<ResponseEntity<List<ChatResponse>>> getUserChats(Authentication authentication) {
-//         User user = (User) authentication.getPrincipal();
-//        return chatService.getUserChats(user.getId())
-//                .collectList() // Превращаем Flux в Mono<List>
-//                .map(ResponseEntity::ok);
-//    }
+    @GetMapping("/by-user")
+    public Mono<ResponseEntity<List<ChatResponse>>> getUserChats(Authentication authentication) {
+        User user = (User) authentication.getPrincipal();
+        return chatService.getUserChats(user.getId())
+                .collectList()
+                .map(list -> ResponseEntity.ok(list)); // Используй лямбду вместо ResponseEntity::ok
+    }
 }

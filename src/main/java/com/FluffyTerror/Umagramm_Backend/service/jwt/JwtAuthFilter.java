@@ -30,44 +30,52 @@ public class JwtAuthFilter implements WebFilter {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+        String path = exchange.getRequest().getURI().getPath();
+        if (path.contains("/auth/register") || path.contains("/auth/login")) {
+            return chain.filter(exchange);
+        }
+        // 1. Логируем путь и наличие заголовка вообще
         String header = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+        log.info("Request Path: {} | Auth Header: {}", path, header);
 
         if (header == null || !header.startsWith("Bearer ")) {
             return chain.filter(exchange);
         }
 
         String token = header.substring(7);
-
         return Mono.just(token)
                 .flatMap(t -> {
                     try {
                         UUID userId = jwtService.extractUserId(t);
-                        return userId != null ? Mono.just(userId.toString()) : Mono.empty();
+                        return userId != null ? Mono.just(userId.toString()) : Mono.error(new RuntimeException("Token invalid"));
                     } catch (Exception e) {
-                        // Вместо Mono.empty() возвращаем ошибку, чтобы попасть в onErrorResume
                         return Mono.error(new RuntimeException("Invalid or expired token"));
                     }
                 })
-                .flatMap(userRepository::findById)
+                .flatMap(userId -> userRepository.findById(userId)
+                        .switchIfEmpty(Mono.error(new RuntimeException("User not found in DB: " + userId))) // Теперь switch тут!
+                )
                 .flatMap(user -> {
                     var auth = new UsernamePasswordAuthenticationToken(user, null, Collections.emptyList());
                     return chain.filter(exchange)
                             .contextWrite(ReactiveSecurityContextHolder.withAuthentication(auth));
                 })
-                // Если токен был, но мы не нашли юзера или userId был null
-                .switchIfEmpty(Mono.error(new RuntimeException("User not found or token invalid")))
+                // УБРАЛИ switchIfEmpty отсюда
                 .onErrorResume(e -> {
+                    // Если контроллер уже начал отвечать (например, 404), не пытаемся писать 401
+                    if (exchange.getResponse().isCommitted()) {
+                        return Mono.error(e);
+                    }
                     log.error("JWT Filter error: {}", e.getMessage());
-                    return writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED, "Unauthorized: " + e.getMessage());
+                    return writeErrorResponse(exchange, HttpStatus.UNAUTHORIZED, e.getMessage());
                 });
     }
 
-    // Вспомогательный метод для записи JSON (как в твоем Advice)
     private Mono<Void> writeErrorResponse(ServerWebExchange exchange, HttpStatus status, String message) {
         exchange.getResponse().setStatusCode(status);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
 
-        // Формируем JSON вручную (или через ObjectMapper)
+        // Формируем JSON вручную
         String json = String.format("{\"status\": %d, \"message\": \"%s\"}", status.value(), message);
         byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
         DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(bytes);

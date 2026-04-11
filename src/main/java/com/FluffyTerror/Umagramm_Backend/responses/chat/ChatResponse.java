@@ -6,6 +6,7 @@ import java.time.LocalDateTime;
 
 public record ChatResponse (
          String id,
+         String name,
          String senderId,
          String receiverId,
          String type,

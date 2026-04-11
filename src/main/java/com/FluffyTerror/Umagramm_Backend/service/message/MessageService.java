@@ -45,7 +45,7 @@ public class MessageService {
     /**
      * Сохранение текстового сообщения
      */
-    public Mono<Void> saveMessage(MessageRequest messageRequest, Authentication authentication) {
+    public Mono<MessageResponse> saveMessage(MessageRequest messageRequest, Authentication authentication) {
         User user = (User) authentication.getPrincipal();
         String senderId = user.getId();
         return chatRepository.findById(messageRequest.getChatId())
@@ -59,7 +59,11 @@ public class MessageService {
                     message.setMessageState(MessageState.SENT);
 
                     return messageRepository.save(message)
-                            .flatMap(saved -> notifyAllChatMembers(saved, chat, senderId, null));
+                            .flatMap(saved ->
+                                    notifyAllChatMembers(saved, chat, senderId, null)
+                                            // Заменяем thenReturn на then!
+                                            .then(mapper.toResponse(saved))
+                            );
                 });
     }
 
@@ -158,7 +162,7 @@ public class MessageService {
 
     public Mono<List<MessageResponse>> findMessages(String chatId) {
         return messageRepository.findMessagesByChatId(chatId)
-                .flatMap(mapper::toResponse)
+                .flatMapSequential(mapper::toResponse)
                 .collectList();
     }
 }

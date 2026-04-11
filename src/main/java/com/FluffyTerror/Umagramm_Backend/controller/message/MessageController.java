@@ -1,6 +1,7 @@
 package com.FluffyTerror.Umagramm_Backend.controller.message;
 
 import com.FluffyTerror.Umagramm_Backend.requests.message.MessageRequest;
+import com.FluffyTerror.Umagramm_Backend.requests.messages.GetMessagesRequest;
 import com.FluffyTerror.Umagramm_Backend.responses.message.MessageResponse;
 import com.FluffyTerror.Umagramm_Backend.service.message.MessageService;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -26,8 +27,8 @@ public class MessageController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Mono<Void> saveMessage(@RequestBody MessageRequest request
-            , Authentication authentication) {
+    public Mono<MessageResponse> saveMessage(@RequestBody MessageRequest request,
+                                             Authentication authentication) {
         return messageService.saveMessage(request, authentication);
     }
 
@@ -42,15 +43,16 @@ public class MessageController {
         return messageService.uploadMediaMessage(chatId, files, authentication);
     }
 
+    //not used for now
     @PatchMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
     public Mono<Void> setMessagesToSeen(@RequestParam("chat-id") String chatId, Authentication authentication) {
         return messageService.setMessagesToSeen(chatId, authentication);
     }
 
-    @GetMapping("chat/{chat-id}")
-    public Mono<ResponseEntity<List<MessageResponse>>> getMessages(@PathVariable("chat-id") String chatId) {
-        return messageService.findMessages(chatId)
+    @PostMapping("/chat/fetch")
+    public Mono<ResponseEntity<List<MessageResponse>>> getMessages(@RequestBody GetMessagesRequest req) {
+        return messageService.findMessages(req.chatId())
                 .map(ResponseEntity::ok);
     }
 }
