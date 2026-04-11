@@ -20,4 +20,5 @@ public class Notification {//DTO class!!!
     private MessageType messageType;
     private NotificationType type;
     private List<AttachmentResponse> attachments;
+    private Long messageId;
 }

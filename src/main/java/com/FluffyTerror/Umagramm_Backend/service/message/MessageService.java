@@ -20,6 +20,7 @@ import com.FluffyTerror.Umagramm_Backend.service.attachment.AttachmentService;
 import com.FluffyTerror.Umagramm_Backend.service.chat.ChatService;
 import com.FluffyTerror.Umagramm_Backend.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ import java.util.List;
 
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class MessageService {
     private final MessageRepository messageRepository;
@@ -84,6 +86,7 @@ public class MessageService {
                                             .type(NotificationType.MESSAGE)
                                             .chatName(chatName)
                                             .attachments(attachments)
+                                            .messageId(message.getId())
                                             .build();
 
                                     // Отправляем уведомление конкретному участнику
@@ -149,15 +152,48 @@ public class MessageService {
     /**
      * Прочтение сообщений
      */
-    public Mono<Void> setMessagesToSeen(String chatId, Authentication authentication) {
-        String currentUserId = authentication.getName();
+//    public Mono<Long> getUnreadMessages(String chatId, String currentUserId) {
+//        return messageRepository.countUnreadMessages(chatId, currentUserId)
+//                .defaultIfEmpty(0L)
+//                .onErrorResume(e -> {
+//                    log.error("Error counting unread messages for chat {}: {}", chatId, e.getMessage());
+//                    return Mono.just(0L); // Спасаем цепочку при ошибке БД
+//                });
+//    }
+
+    public Mono<Void> setMessagesToSeen(String chatId, Long lastMessageId, String currentUserId) {
 
         return messageRepository.setMessagesToSeenByChat(
-                MessageState.SEEN, // Новый статус
-                MessageState.SENT, // Какой статус меняем
-                chatId,
-                currentUserId
-        ).then(/* логика уведомлений */);
+                        MessageState.SEEN,
+                        MessageState.SENT,
+                        chatId,
+                        lastMessageId,
+                        currentUserId
+                )
+                .flatMap(updatedCount -> {
+                    if (updatedCount > 0) {
+                        log.info("Read msg: {} in chat {}", updatedCount, chatId);
+
+                        // Отправляем сигнал о прочтении через сокеты/уведомления
+                        return notifyAboutReadStatus(chatId, lastMessageId, currentUserId);
+                    }
+                    return Mono.empty();
+                });
+    }
+
+    private Mono<Void> notifyAboutReadStatus(String chatId, Long lastMessageId, String readerId) {
+        return chatMemberRepository.findAllByChatId(chatId)
+                .flatMap(member -> {
+                    Notification readNotification = Notification.builder()
+                            .type(NotificationType.SEEN) // Новый тип уведомления
+                            .chatId(chatId)
+                            .content(lastMessageId.toString()) // До какого ID прочитано
+                            .senderId(readerId)
+                            .build();
+
+                    return notificationService.sendNotification(member.getUserId(), readNotification);
+                })
+                .then();
     }
 
     public Mono<List<MessageResponse>> findMessages(String chatId) {

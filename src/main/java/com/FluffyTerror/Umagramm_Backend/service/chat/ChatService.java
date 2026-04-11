@@ -127,7 +127,7 @@ public class ChatService {
     }
 
     public Mono<Long> getUnreadMessages(String chatId, String currentUserId) {
-        return messageRepository.countUnreadMessages(chatId, currentUserId, MessageState.SENT)
+        return messageRepository.countUnreadMessages(chatId, currentUserId)
                 .defaultIfEmpty(0L);
     }
 
