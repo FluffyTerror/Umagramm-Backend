@@ -16,6 +16,7 @@ public class UserMapper {
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
                 .lastSeen(user.getLastSeen())
+                .profilePhotoId(user.getProfilePhotoId())
                 .isOnline(user.isOnline())
                 .build();
     }

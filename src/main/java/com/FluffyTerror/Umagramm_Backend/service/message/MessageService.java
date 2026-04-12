@@ -152,15 +152,6 @@ public class MessageService {
     /**
      * Прочтение сообщений
      */
-//    public Mono<Long> getUnreadMessages(String chatId, String currentUserId) {
-//        return messageRepository.countUnreadMessages(chatId, currentUserId)
-//                .defaultIfEmpty(0L)
-//                .onErrorResume(e -> {
-//                    log.error("Error counting unread messages for chat {}: {}", chatId, e.getMessage());
-//                    return Mono.just(0L); // Спасаем цепочку при ошибке БД
-//                });
-//    }
-
     public Mono<Void> setMessagesToSeen(String chatId, Long lastMessageId, String currentUserId) {
 
         return messageRepository.setMessagesToSeenByChat(

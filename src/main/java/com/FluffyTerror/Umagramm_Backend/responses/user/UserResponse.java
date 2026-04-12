@@ -14,5 +14,6 @@ public class UserResponse {
     private String firstName;
     private String lastName;
     private LocalDateTime lastSeen;
+    private Long profilePhotoId;
     private boolean isOnline;
 }

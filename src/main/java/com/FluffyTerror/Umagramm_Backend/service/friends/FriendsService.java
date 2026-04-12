@@ -5,8 +5,10 @@ import com.FluffyTerror.Umagramm_Backend.models.friends.Friend;
 import com.FluffyTerror.Umagramm_Backend.repository.friends.FriendsRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.user.UserRepository;
 import com.FluffyTerror.Umagramm_Backend.responses.friend.FriendResponse;
+import com.FluffyTerror.Umagramm_Backend.websockets.WebSocketSessionRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -18,6 +20,7 @@ public class FriendsService {
 
     private final FriendsRepository friendsRepository;
     private final UserRepository userRepository;
+    private final WebSocketSessionRegistry webSocketSessionRegistry;
 
     public Mono<Friend> createFriendsRequest(String initiatorId, String receiverId) {
         if (initiatorId.equals(receiverId)) {
@@ -30,8 +33,16 @@ public class FriendsService {
         friend.setCreatedAt(LocalDateTime.now());
         friend.setUpdatedAt(LocalDateTime.now());
         return friendsRepository.save(friend)
-                .onErrorResume(org.springframework.dao.DataIntegrityViolationException.class,
-                        e -> Mono.error(new IllegalStateException("Friend request already sent, or you are friends already")));
+                .flatMap(savedFriend -> {
+                    // СРАЗУ ПОСЛЕ СОХРАНЕНИЯ ПЫТАЕМСЯ УВЕДОМИТЬ
+                    WebSocketSession session = webSocketSessionRegistry.get(receiverId);
+                    if (session != null && session.isOpen()) {
+                        String notification = "{\"type\": \"FRIEND_REQUEST\"}";
+                        return session.send(Mono.just(session.textMessage(notification)))
+                                .thenReturn(savedFriend);
+                    }
+                    return Mono.just(savedFriend);
+                });
     }
 
     public Mono<Friend> acceptFriendRequest(String senderId, String receiverId) {

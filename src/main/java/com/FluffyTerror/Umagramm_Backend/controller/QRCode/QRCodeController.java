@@ -33,7 +33,7 @@ public class QRCodeController {
     @PostMapping("/scan")
     public Mono<ResponseEntity<String>> onScanToken(@AuthenticationPrincipal User initiator,
                                                     @RequestBody QrRequest qrRequest) {
-        return qrService.consumeToken(qrRequest.token()).flatMap(//--TODO сделать парсинг токена на мобилке
+        return qrService.consumeToken(qrRequest.token()).flatMap(
                 receiver ->{
                     return friendsService.createFriendsRequest(initiator.getId(),receiver);
                 }

@@ -1,5 +1,6 @@
 package com.FluffyTerror.Umagramm_Backend.controller.user;
 
+import com.FluffyTerror.Umagramm_Backend.models.user.User;
 import com.FluffyTerror.Umagramm_Backend.responses.friend.FriendResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.user.UserResponse;
 import com.FluffyTerror.Umagramm_Backend.service.user.UserService;
@@ -7,9 +8,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -22,11 +22,15 @@ import java.util.List;
 public class UserController {
     private final UserService userService;
 
-//    @GetMapping
-//    public Mono<ResponseEntity<List<UserResponse>>> getAllUsers(Authentication authentication) {
-//        return userService.getAllUsersExceptSelf(authentication).map(
-//                ResponseEntity::ok);
-//    }
+    @GetMapping
+    public Mono<UserResponse> getInfoAboutCurrentUser(@AuthenticationPrincipal User user) {
+        return userService.getInfoAboutCurrentUser(user);
+    }
+
+    @PostMapping("/fetch")
+    public Mono<List<UserResponse>> getInfoAboutUsers(@AuthenticationPrincipal User user,@RequestBody UsersRequest request) {
+        return userService.getInfoAboutUsers(user.getId(),request);
+    }
 
     @GetMapping("/friends")
     public Mono<List<FriendResponse>> getAllFriends(Authentication authentication) {

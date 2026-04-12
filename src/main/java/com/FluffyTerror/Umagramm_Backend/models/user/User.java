@@ -2,6 +2,7 @@ package com.FluffyTerror.Umagramm_Backend.models.user;
 
 import com.FluffyTerror.Umagramm_Backend.models.attachment.Attachment;
 import com.FluffyTerror.Umagramm_Backend.common.BaseAuditingEntity;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -38,7 +39,9 @@ public class User extends BaseAuditingEntity implements Persistable<String> {
     private String firstName;
     private String lastName;
     private String username;
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime lastSeen;
+
     private Long profilePhotoId;   // FK → attachment.id
 
     @Transient
