@@ -1,15 +1,13 @@
 package com.FluffyTerror.Umagramm_Backend.service.user;
 
-import com.FluffyTerror.Umagramm_Backend.controller.user.UsersRequest;
+import com.FluffyTerror.Umagramm_Backend.requests.UsersRequest;
 import com.FluffyTerror.Umagramm_Backend.enums.FriendStatus;
-import com.FluffyTerror.Umagramm_Backend.exceptions.FriendNotFoundException;
 import com.FluffyTerror.Umagramm_Backend.models.user.User;
 import com.FluffyTerror.Umagramm_Backend.repository.friends.FriendsRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.user.UserRepository;
 import com.FluffyTerror.Umagramm_Backend.mapper.UserMapper;
 import com.FluffyTerror.Umagramm_Backend.responses.friend.FriendResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.user.UserResponse;
-import com.FluffyTerror.Umagramm_Backend.websockets.WebSocketSessionHandler;
 import com.FluffyTerror.Umagramm_Backend.websockets.WebSocketSessionRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;

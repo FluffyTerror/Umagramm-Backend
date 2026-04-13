@@ -1,6 +1,6 @@
 package com.FluffyTerror.Umagramm_Backend.websockets;
 
-import com.FluffyTerror.Umagramm_Backend.controller.user.UsersRequest;
+import com.FluffyTerror.Umagramm_Backend.requests.UsersRequest;
 import com.FluffyTerror.Umagramm_Backend.service.friends.FriendsService;
 import com.FluffyTerror.Umagramm_Backend.service.jwt.JwtService;
 import com.FluffyTerror.Umagramm_Backend.service.message.MessageService;
@@ -16,7 +16,6 @@ import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Mono;
 
-import java.security.Principal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -39,7 +38,6 @@ public class WebSocketSessionHandler implements WebSocketHandler {
         }
         return null;
     }
-    // WebSocketSessionHandler.java
 
     @Override
     public Mono<Void> handle(WebSocketSession session) {
@@ -65,12 +63,10 @@ public class WebSocketSessionHandler implements WebSocketHandler {
                     })
                     .then();
 
-            // Поток уведомлений пользователю (в NotificationService)
-            // doOnTerminate почистит реестр
+            // Поток уведомлений пользователю
             return input.doFinally(signal -> {
                 webSocketSessionRegistry.unregister(userId);
-
-                // ✅ OFFLINE
+                // OFFLINE
                 userService.updateUserOnlineStatus(userId)
                         .then(userService.broadcastStatus(userId, false))
                         .subscribe();

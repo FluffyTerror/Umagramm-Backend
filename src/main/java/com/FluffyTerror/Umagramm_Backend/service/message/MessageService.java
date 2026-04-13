@@ -76,7 +76,7 @@ public class MessageService {
         return chatService.getChatName(chat, senderId)
                 .flatMapMany(chatName ->
                         chatMemberRepository.findAllByChatId(chat.getId())
-                                .filter(member -> !member.getUserId().equals(senderId)) // Не шлем самому себе
+                                //.filter(member -> !member.getUserId().equals(senderId)) // Не шлем самому себе
                                 .flatMap(member -> {
                                     Notification notification = Notification.builder()
                                             .chatId(chat.getId())

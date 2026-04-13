@@ -20,12 +20,14 @@ public interface UserRepository extends ReactiveCrudRepository<User, String> {
 
     @Query("SELECT * from users WHERE id = :publicId")
     Mono<User> getInfoAboutUser(String publicId);
+
     @Query("""
-    UPDATE users
-    SET last_seen = :lastSeen
-    WHERE id = :userId
-""")
+                UPDATE users
+                SET last_seen = :lastSeen
+                WHERE id = :userId
+            """)
     Mono<Void> updateLastSeen(String userId, LocalDateTime lastSeen);
+
     @Query("SELECT * from users WHERE id IN (:userIds)")
     Flux<User> findAllByIds(List<String> userIds);
 
@@ -33,12 +35,12 @@ public interface UserRepository extends ReactiveCrudRepository<User, String> {
     Mono<User> getUserById(String userId);
 
     @Query("""
-    SELECT u.* FROM users u
-    JOIN friends f ON (u.id = f.sender_id OR u.id = f.receiver_id)
-    WHERE (f.sender_id = :currentUserId OR f.receiver_id = :currentUserId)
-      AND u.id != :currentUserId
-      AND f.status = 'Accepted'
-""")
+                SELECT u.* FROM users u
+                JOIN friends f ON (u.id = f.sender_id OR u.id = f.receiver_id)
+                WHERE (f.sender_id = :currentUserId OR f.receiver_id = :currentUserId)
+                  AND u.id != :currentUserId
+                  AND f.status = 'Accepted'
+            """)
     Flux<User> findAllAcceptedFriends(String currentUserId);
 
 }

@@ -1,4 +1,4 @@
-package com.FluffyTerror.Umagramm_Backend.controller.user;
+package com.FluffyTerror.Umagramm_Backend.requests;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

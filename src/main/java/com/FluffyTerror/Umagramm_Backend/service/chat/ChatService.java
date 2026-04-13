@@ -103,11 +103,16 @@ public class ChatService {
         });
     }
 
-    private ChatResponse createResponse(Chat chat, String senderId, String receiverId, Long unread, Boolean online, Message msg, String chatName) {
+    private ChatResponse createResponse(Chat chat, String currentUserId, String receiverId, Long unread, Boolean online, Message msg, String chatName) {
+        // Определяем, кто реально отправил последнее сообщение
+        String actualSenderId = (msg != null && msg.getSenderId() != null)
+                ? msg.getSenderId()
+                : currentUserId; // fallback на случай, если сообщений еще нет
+
         return new ChatResponse(
                 chat.getId(),
                 chatName,
-                senderId,
+                actualSenderId,
                 receiverId,
                 chat.getChatType().name(),
                 unread,

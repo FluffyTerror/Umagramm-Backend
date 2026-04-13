@@ -1,16 +1,15 @@
 package com.FluffyTerror.Umagramm_Backend.controller.user;
 
 import com.FluffyTerror.Umagramm_Backend.models.user.User;
+import com.FluffyTerror.Umagramm_Backend.requests.UsersRequest;
 import com.FluffyTerror.Umagramm_Backend.responses.friend.FriendResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.user.UserResponse;
 import com.FluffyTerror.Umagramm_Backend.service.user.UserService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
