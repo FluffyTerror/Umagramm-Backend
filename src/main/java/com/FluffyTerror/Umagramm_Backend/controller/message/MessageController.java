@@ -2,6 +2,7 @@ package com.FluffyTerror.Umagramm_Backend.controller.message;
 
 import com.FluffyTerror.Umagramm_Backend.models.user.User;
 import com.FluffyTerror.Umagramm_Backend.requests.message.MessageRequest;
+import com.FluffyTerror.Umagramm_Backend.requests.message.MessageTextRequest;
 import com.FluffyTerror.Umagramm_Backend.requests.messages.GetMessagesRequest;
 import com.FluffyTerror.Umagramm_Backend.responses.message.MessageResponse;
 import com.FluffyTerror.Umagramm_Backend.service.message.MessageService;
@@ -39,29 +40,22 @@ public class MessageController {
             @RequestPart("files") Flux<FilePart> files,
             @Parameter()
             @RequestPart("chatId") String chatId,
+            MessageTextRequest messageTextRequest,
             Authentication authentication
     ) {
-        return messageService.uploadMediaMessage(chatId, files, authentication);
+        return messageService.uploadMediaMessage(chatId, files, authentication, messageTextRequest);
     }
 
-    //not used for now
+
     @PatchMapping("/seen")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public Mono<Void> setMessagesToSeen(
             @RequestParam("chat-id") String chatId,
-            @RequestParam("last-message-id") Long lastMessageId, // 👈 принимаем ID последнего увиденного сообщения
+            @RequestParam("last-message-id") Long lastMessageId, // принимаем ID последнего увиденного сообщения
             Authentication authentication) {
         User currentUser = (User) authentication.getPrincipal();
         return messageService.setMessagesToSeen(chatId, lastMessageId, currentUser.getId());
     }
-
-//    //not used for now
-//    @PatchMapping("/seen")
-//    @ResponseStatus(HttpStatus.ACCEPTED)
-//    public Mono<Long> setMessagesToSeen3(@RequestParam("chat-id") String chatId, Authentication authentication) {
-//        User currentUser = (User) authentication.getPrincipal();
-//        return messageService.getUnreadMessages(chatId, currentUser.getId());
-//    }
 
     @PostMapping("/chat/fetch")
     public Mono<ResponseEntity<List<MessageResponse>>> getMessages(@RequestBody GetMessagesRequest req) {

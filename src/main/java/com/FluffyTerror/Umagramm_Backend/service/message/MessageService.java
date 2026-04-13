@@ -14,6 +14,7 @@ import com.FluffyTerror.Umagramm_Backend.repository.chat.ChatRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.chatMember.ChatMemberRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.message.MessageRepository;
 import com.FluffyTerror.Umagramm_Backend.requests.message.MessageRequest;
+import com.FluffyTerror.Umagramm_Backend.requests.message.MessageTextRequest;
 import com.FluffyTerror.Umagramm_Backend.responses.attachment.AttachmentResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.message.MessageResponse;
 import com.FluffyTerror.Umagramm_Backend.service.attachment.AttachmentService;
@@ -98,7 +99,7 @@ public class MessageService {
     /**
      * Загрузка медиа-сообщения
      */
-    public Mono<Void> uploadMediaMessage(String chatId, Flux<FilePart> files, Authentication authentication) {
+    public Mono<Void> uploadMediaMessage(String chatId, Flux<FilePart> files, Authentication authentication, MessageTextRequest messageTextRequest) {
         User user = (User) authentication.getPrincipal();
         String senderId = user.getId();
 
@@ -108,7 +109,12 @@ public class MessageService {
                     Message message = new Message();
                     message.setChatId(chat.getId());
                     message.setSenderId(senderId);
-                    message.setMessageType(MessageType.IMAGE);
+                    message.setContent(messageTextRequest.getContent());
+                    if (messageTextRequest.getContent() == null || messageTextRequest.getContent().trim().isEmpty()) {
+                        message.setMessageType(MessageType.IMAGE);
+                    } else {
+                        message.setMessageType(MessageType.MIXED);
+                    }
                     message.setMessageState(MessageState.SENT);
 
                     return messageRepository.save(message)
@@ -149,6 +155,7 @@ public class MessageService {
             default -> MessageType.FILE; // Прочие файлы
         };
     }
+
     /**
      * Прочтение сообщений
      */
@@ -165,7 +172,7 @@ public class MessageService {
                     if (updatedCount > 0) {
                         log.info("Read msg: {} in chat {}", updatedCount, chatId);
 
-                        // Отправляем сигнал о прочтении через сокеты/уведомления
+                        // сигнал в сокет
                         return notifyAboutReadStatus(chatId, lastMessageId, currentUserId);
                     }
                     return Mono.empty();
@@ -176,9 +183,9 @@ public class MessageService {
         return chatMemberRepository.findAllByChatId(chatId)
                 .flatMap(member -> {
                     Notification readNotification = Notification.builder()
-                            .type(NotificationType.SEEN) // Новый тип уведомления
+                            .type(NotificationType.SEEN)
                             .chatId(chatId)
-                            .content(lastMessageId.toString()) // До какого ID прочитано
+                            .content(lastMessageId.toString())
                             .senderId(readerId)
                             .build();
 

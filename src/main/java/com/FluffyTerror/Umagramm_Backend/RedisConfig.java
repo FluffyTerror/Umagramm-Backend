@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
+import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 @Configuration
@@ -20,6 +21,15 @@ public class RedisConfig {
                 .<String, String>newSerializationContext(serializer)
                 .build();
         return new ReactiveRedisTemplate<>(factory, context);//создаётся клиент Redis с моими правилами
+    }
+
+    @Bean
+    public ReactiveRedisTemplate<String, byte[]> reactiveByteArrayRedisTemplate(ReactiveRedisConnectionFactory factory) {
+        RedisSerializationContext<String, byte[]> context = RedisSerializationContext
+                .<String, byte[]>newSerializationContext(new StringRedisSerializer()) // Ключи — строки
+                .value(RedisSerializer.byteArray()) // Значения — голые байты
+                .build();
+        return new ReactiveRedisTemplate<>(factory, context);
     }
 
 }
