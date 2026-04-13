@@ -22,4 +22,6 @@ public class Attachment {
     private String url;
 
     private Instant createdAt;
+
+    private String filename;
 }

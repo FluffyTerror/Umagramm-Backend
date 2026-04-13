@@ -130,13 +130,15 @@ public class MessageService {
                                                             attachment.setMessageId(savedMessage.getId());
                                                             attachment.setType(detectedType);
                                                             attachment.setUrl(filePath);
+                                                            attachment.setFilename(originalFilename);
                                                             return attachmentRepository.save(attachment);
                                                         });
                                             })
                                             .map(savedAt -> new AttachmentResponse(
                                                     savedAt.getId(),
                                                     savedAt.getType(),
-                                                    savedAt.getUrl()
+                                                    savedAt.getUrl(),
+                                                    savedAt.getFilename()
                                             ))
                                             .collectList()
                                             // 4. Когда ВСЕ картинки сохранены, отправляем ОДНО уведомление со списком

@@ -12,4 +12,5 @@ public class AttachmentResponse {
     private Long id;
     private MessageType type;
     private String url;
+    private String filename;
 }
