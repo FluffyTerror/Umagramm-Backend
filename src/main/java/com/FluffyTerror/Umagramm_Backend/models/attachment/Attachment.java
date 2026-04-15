@@ -24,4 +24,6 @@ public class Attachment {
     private Instant createdAt;
 
     private String filename;
+
+    private String contentType;
 }

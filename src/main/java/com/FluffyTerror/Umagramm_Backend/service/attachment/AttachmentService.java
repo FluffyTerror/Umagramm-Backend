@@ -2,9 +2,11 @@ package com.FluffyTerror.Umagramm_Backend.service.attachment;
 
 import com.FluffyTerror.Umagramm_Backend.enums.MessageType;
 import com.FluffyTerror.Umagramm_Backend.exceptions.FileNotFoundException;
+import com.FluffyTerror.Umagramm_Backend.models.attachment.Attachment;
 import com.FluffyTerror.Umagramm_Backend.repository.attachment.AttachmentRepository;
 
 
+import com.FluffyTerror.Umagramm_Backend.responses.attachment.ResourceData;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
@@ -63,54 +65,57 @@ public class AttachmentService {
                 .thenReturn(target.toString());
     }
 
-    public Mono<Resource> getAttachment(Long attachmentId) {
+    public Mono<ResourceData> getAttachment(Long attachmentId) {
         String cacheKey = "attachment:" + attachmentId;
 
-        return redisTemplate.opsForValue()
-                .get(cacheKey)
-                .map(bytes -> (Resource) new ByteArrayResource(bytes))
-                .switchIfEmpty(readFromDiskAndCache(attachmentId, cacheKey));
+        // Сначала получаем метаданные из БД
+        return attachmentRepository.findById(attachmentId)
+                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND, "Attachment not found in DB")))
+                .flatMap(attachment ->
+                        // Ищем байты в кэше
+                        redisTemplate.opsForValue().get(cacheKey)
+                                // Если нашли в кэше, собираем ResourceData с ByteArrayResource
+                                .map(bytes -> new ResourceData(
+                                        attachment.getFilename(),
+                                        attachment.getContentType(),
+                                        new ByteArrayResource(bytes)
+                                ))
+                                // Если в кэше пусто, идем на диск
+                                .switchIfEmpty(readFromDiskAndCache(attachment, cacheKey))
+                );
     }
 
-    private Mono<Resource> readFromDiskAndCache(Long attachmentId, String cacheKey) {
-        return attachmentRepository.findById(attachmentId)
-                .switchIfEmpty(Mono.error(new ResponseStatusException(HttpStatus.NOT_FOUND)))
-                .flatMap(attachment -> {
+    private Mono<ResourceData> readFromDiskAndCache(Attachment attachment, String cacheKey) {
+        Path path = Paths.get(attachment.getUrl());
 
-                    Path path = Paths.get(attachment.getUrl())
-                            .toAbsolutePath()
-                            .normalize();
+        return Mono.fromCallable(() -> {
+                    if (!Files.exists(path)) {
+                        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found on disk");
+                    }
+                    return Files.size(path);
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(size -> {
+                    // Если файл небольшой — читаем в память и кэшируем
+                    if (size > 0 && size <= MAX_CACHE_SIZE) {
+                        return Mono.fromCallable(() -> Files.readAllBytes(path))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMap(bytes -> redisTemplate.opsForValue()
+                                        .set(cacheKey, bytes, Duration.ofHours(1))
+                                        .thenReturn(new ResourceData(
+                                                attachment.getFilename(),
+                                                attachment.getContentType(),
+                                                new ByteArrayResource(bytes)
+                                        ))
+                                );
+                    }
 
-                    return Mono.fromCallable(() -> {
-                                if (!Files.exists(path)) {
-                                    throw new FileNotFoundException("File not found");
-                                }
-                                if (!Files.isReadable(path)) {
-                                    throw new AccessDeniedException("Cannot read file");
-                                }
-                                return path;
-                            })
-                            .subscribeOn(Schedulers.boundedElastic())
-                            .flatMap(validPath -> {
-
-                                return Mono.fromCallable(() -> Files.size(validPath))
-                                        .flatMap(size -> {
-
-                                            // если мелочь ебашим в кеш
-                                            if (size > 0 && size <= MAX_CACHE_SIZE) {
-                                                return Mono.fromCallable(() -> Files.readAllBytes(validPath))
-                                                        .subscribeOn(Schedulers.boundedElastic())
-                                                        .flatMap(bytes ->
-                                                                redisTemplate.opsForValue()
-                                                                        .set(cacheKey, bytes, Duration.ofHours(1))
-                                                                        .thenReturn((Resource) new ByteArrayResource(bytes))
-                                                        );
-                                            }
-
-
-                                            return Mono.just((Resource) new FileSystemResource(validPath));//стриминг с диска
-                                        });
-                            });
+                    // Стриминг с диска для больших файлов
+                    return Mono.just(new ResourceData(
+                            attachment.getFilename(),
+                            attachment.getContentType(),
+                            new FileSystemResource(path)
+                    ));
                 });
     }
 }

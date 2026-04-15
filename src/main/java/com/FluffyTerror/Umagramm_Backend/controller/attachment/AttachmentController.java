@@ -26,10 +26,11 @@ public class AttachmentController {
     private final AttachmentService attachmentService;
 
     @GetMapping("/{attachment-id}")
-    public Mono<ResponseEntity<Resource>> viewAttachment(@PathVariable("attachment-id") Long attachmentId,@AuthenticationPrincipal User user ) {
+    public Mono<ResponseEntity<Resource>> viewAttachment(@PathVariable("attachment-id") Long attachmentId, @AuthenticationPrincipal User user) {
         return attachmentService.getAttachment(attachmentId)
-                .flatMap(resource ->
+                .flatMap(resourceData ->
                         Mono.fromCallable(() -> {
+                            Resource resource = resourceData.getResource();
 
                             if (!resource.exists()) {
                                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found");
@@ -39,22 +40,26 @@ public class AttachmentController {
                                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "File not readable");
                             }
 
-                            MediaType mediaType = MediaTypeFactory.getMediaType(resource)
-                                    .orElse(MediaType.APPLICATION_OCTET_STREAM);
+                            MediaType mediaType;
+                            try {
+                                mediaType = MediaType.parseMediaType(resourceData.getContentType());
+                            } catch (Exception e) {
+                                mediaType = MediaType.APPLICATION_OCTET_STREAM;
+                            }
 
                             long length = resource.contentLength();
 
                             return ResponseEntity.ok()
                                     .contentType(mediaType)
-                                    .contentLength(length)
+                                    //.contentLength(length)
                                     .header(HttpHeaders.CONTENT_DISPOSITION,
-                                            getContentDisposition(resource, mediaType))
+                                            getContentDisposition(resourceData.getFilename(), mediaType))
                                     .body(resource);
                         }).subscribeOn(Schedulers.boundedElastic())
                 );
     }
 
-    private static String getContentDisposition(Resource resource, MediaType mediaType) {
+    private static String getContentDisposition(String filename, MediaType mediaType) {
         String majorType = mediaType.getType().toLowerCase();
 
         boolean isMedia = majorType.equals("image") ||
@@ -62,9 +67,9 @@ public class AttachmentController {
                 majorType.equals("audio");
 
         String dispositionType = isMedia ? "inline" : "attachment";
-        String filename = resource.getFilename() != null ? resource.getFilename() : "file";
+        String safeFilename = filename != null ? filename : "file";
 
-        return dispositionType + "; filename=\"" + filename + "\"";
+        return dispositionType + "; filename=\"" + safeFilename + "\"";
     }
 
 }

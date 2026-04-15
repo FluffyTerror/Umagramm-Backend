@@ -14,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -58,7 +59,7 @@ public class MessageController {
     }
 
     @PostMapping("/chat/fetch")
-    public Mono<ResponseEntity<List<MessageResponse>>> getMessages(@RequestBody GetMessagesRequest req) {
+    public Mono<ResponseEntity<List<MessageResponse>>> getMessages(@RequestBody GetMessagesRequest req, @AuthenticationPrincipal User user) {
         return messageService.findMessages(req.chatId())
                 .map(ResponseEntity::ok);
     }

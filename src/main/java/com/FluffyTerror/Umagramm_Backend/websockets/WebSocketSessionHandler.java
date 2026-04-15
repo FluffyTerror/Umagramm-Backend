@@ -41,12 +41,13 @@ public class WebSocketSessionHandler implements WebSocketHandler {
 
     @Override
     public Mono<Void> handle(WebSocketSession session) {
-        String query = session.getHandshakeInfo().getUri().toString();
-        String token = getToken(query);
-        if (token == null || token.isEmpty()) {
+        List<String> headers = session.getHandshakeInfo().getHeaders().get("Authorization");
+
+        if (headers == null || headers.isEmpty()) {
             return session.close(CloseStatus.BAD_DATA);
         }
-
+        String authHeader = headers.getFirst(); // Берем первый элемент списка
+        String token = authHeader.replace("Bearer ", "");
         try {
             String userId = jwtService.extractUserId(token).toString();
             webSocketSessionRegistry.register(userId, session);

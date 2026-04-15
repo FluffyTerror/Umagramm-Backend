@@ -29,6 +29,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 
+import java.net.URLConnection;
 import java.util.List;
 
 
@@ -121,15 +122,18 @@ public class MessageService {
                             .flatMap(savedMessage ->
                                     files.flatMap(file -> {
                                                 String originalFilename = file.filename();
+                                                String contentType = file.headers().getContentType().toString();
 
                                                 MessageType detectedType = determineMessageType(originalFilename);
 
-                                               return attachmentService.saveFile(file, senderId)
+                                                String finalContentType = contentType;
+                                                return attachmentService.saveFile(file, senderId)
                                                         .flatMap(filePath -> {
                                                             Attachment attachment = new Attachment();
                                                             attachment.setMessageId(savedMessage.getId());
                                                             attachment.setType(detectedType);
                                                             attachment.setUrl(filePath);
+                                                            attachment.setContentType(finalContentType);
                                                             attachment.setFilename(originalFilename);
                                                             return attachmentRepository.save(attachment);
                                                         });

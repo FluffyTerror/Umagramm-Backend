@@ -117,6 +117,7 @@ public class AuthService {
         }
         return sb.toString();
     }
+
     private Mono<Long> createDefaultAvatar() {
         Attachment attachment = new Attachment();
         // Пишем только имя файла, как это делает attachmentService.saveFile

@@ -20,12 +20,6 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @PostMapping(value = "/nigga", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public Mono<Void> hello(@RequestBody String msg) {
-        System.out.println(msg);
-        return Mono.empty();
-    }
-
     @PostMapping(value = "/register", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Mono<RegisterResponse> register(@RequestPart("data") RegisterRequest request, @RequestPart(value = "file", required = false) FilePart filePart) {
         return authService.register(request, filePart);
