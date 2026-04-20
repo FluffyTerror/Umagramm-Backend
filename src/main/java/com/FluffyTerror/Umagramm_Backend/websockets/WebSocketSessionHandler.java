@@ -96,15 +96,30 @@ public class WebSocketSessionHandler implements WebSocketHandler {
 
                     return friendsService.createFriendsRequest(userId, receiverId)
                             .flatMap(request -> {
+                                // 1. Уведомляем получателя (если он в сети)
                                 WebSocketSession receiverSession = webSocketSessionRegistry.get(receiverId);
+                                Mono<Void> notifyReceiver = Mono.empty();
 
                                 if (receiverSession != null && receiverSession.isOpen()) {
                                     String notification = "{\"type\":\"FRIEND_REQUEST\"}";
-                                    return receiverSession.send(
+                                    notifyReceiver = receiverSession.send(
                                             Mono.just(receiverSession.textMessage(notification))
                                     );
                                 }
-                                return Mono.empty();
+
+                                // 2. СРАЗУ запрашиваем статус получателя для отправителя
+                                UsersRequest statusRequest = new UsersRequest(List.of(receiverId));
+                                Mono<Void> sendStatusToSender = userService.getInfoAboutUsers(userId, statusRequest)
+                                        .flatMap(userResponses -> {
+                                            Map<String, Object> response = Map.of(
+                                                    "type", "STATUS_LIST",
+                                                    "users", userResponses
+                                            );
+                                            return sendJson(session, response); // Отправляем СЕБЕ (отправителю)
+                                        });
+
+                                // Выполняем оба действия параллельно
+                                return Mono.when(notifyReceiver, sendStatusToSender);
                             });
                 }
 
@@ -144,6 +159,56 @@ public class WebSocketSessionHandler implements WebSocketHandler {
                                 ));
                             });
                 }
+                case "KEY_EXCHANGE": {
+                    String targetId = json.get("targetId").asText();
+                    String myPublicKey = json.get("publicKey").asText();
+
+                    WebSocketSession targetSession = webSocketSessionRegistry.get(targetId);
+
+                    if (targetSession != null && targetSession.isOpen()) {
+                        Map<String, String> response = Map.of(
+                                "type", "KEY_EXCHANGE_COMPLETE",
+                                "fromId", userId,
+                                "publicKey", myPublicKey
+                        );
+                        return sendJson(targetSession, response);
+                    }
+                    return Mono.empty();
+                }
+                case "ACCEPT_FRIEND_REQUEST": {
+                    String requesterId = json.get("requesterId").asText();
+                    String myPublicKey = json.get("publicKey").asText();
+                    log.info("incoming ACCEPT: userId={}, requesterId={}", userId, requesterId);
+
+                    return friendsService.acceptFriendRequest(userId, requesterId)
+                            .flatMap(friendship -> {
+                                log.info("DB updated. looking for session for requesterId={}", requesterId);
+                                WebSocketSession requesterSession = webSocketSessionRegistry.get(requesterId);
+
+                                if (requesterSession != null && requesterSession.isOpen()) {
+                                    log.info("session found. sending FRIEND_ACCEPTED_HANDSHAKE...");
+                                    Map<String, String> response = Map.of(
+                                            "type", "FRIEND_ACCEPTED_HANDSHAKE",
+                                            "fromId", userId,
+                                            "publicKey", myPublicKey
+                                    );
+                                    return sendJson(requesterSession, response);
+                                } else {
+                                    log.warn("Session not found. requesterId={} currently OFFLINE.", requesterId);
+                                    return Mono.empty();
+                                }
+                            })
+                            // Если сервис ничего не вернул (Mono.empty)
+                            .switchIfEmpty(Mono.defer(() -> {
+                                log.warn("friendsService returned void! request not found or already accepted");
+                                return Mono.empty();
+                            }))
+                            // Перехват ошибок базы данных или бизнес-логики
+                            .onErrorResume(e -> {
+                                log.error("Error inside friendsService: ", e);
+                                return Mono.empty();
+                            });
+                }
 
                 default:
                     log.warn("Unknown WS type: {}", type);
@@ -153,6 +218,15 @@ public class WebSocketSessionHandler implements WebSocketHandler {
         } catch (Exception e) {
             log.error("WS parse error", e);
             return Mono.empty();
+        }
+    }
+    private Mono<Void> sendJson(WebSocketSession session, Object data) {
+        try {
+            String json = objectMapper.writeValueAsString(data);
+            return session.send(Mono.just(session.textMessage(json)));
+        } catch (JsonProcessingException e) {
+            log.error("JSON serializing error", e);
+            return Mono.error(e);
         }
     }
 }

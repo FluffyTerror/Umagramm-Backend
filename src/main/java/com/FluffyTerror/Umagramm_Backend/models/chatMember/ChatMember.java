@@ -21,6 +21,7 @@ public class ChatMember implements Persistable<Long> {
     private String userId;
     @Column("member_role")
     private MemberRole role; // ADMIN (может удалять), MEMBER (просто пишет)
+    private String invitedBy;
     private LocalDateTime joinedAt;
 
     @Transient

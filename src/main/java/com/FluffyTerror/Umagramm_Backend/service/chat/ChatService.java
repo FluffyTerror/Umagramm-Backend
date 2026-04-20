@@ -62,8 +62,8 @@ public class ChatService {
                     chat.markNew();
                     return chatRepository.save(chat)
                             .flatMap(savedChat -> {
-                                ChatMember m1 = createMember(savedChat.getId(), creatorId);
-                                ChatMember m2 = createMember(savedChat.getId(), partnerId);
+                                ChatMember m1 = createMember(savedChat.getId(), creatorId, null);
+                                ChatMember m2 = createMember(savedChat.getId(), partnerId, null);
                                 return chatMemberRepository.save(m1)
                                         .then(chatMemberRepository.save(m2))
                                         .thenReturn(savedChat);
@@ -147,13 +147,14 @@ public class ChatService {
                 .defaultIfEmpty(false);
     }
 
-    private ChatMember createMember(String chatId, String userId) {
+    private ChatMember createMember(String chatId, String userId,String invitedBy) {
         ChatMember member = new ChatMember();
         member.setChatId(chatId);
         member.setUserId(userId);
         member.setRole(MemberRole.MEMBER);
         member.setJoinedAt(LocalDateTime.now());
         member.setNew(true);
+        member.setInvitedBy(invitedBy);
         return member;
     }
 

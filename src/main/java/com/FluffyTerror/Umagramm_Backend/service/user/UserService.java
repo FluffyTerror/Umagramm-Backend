@@ -43,19 +43,16 @@ public class UserService {
                         return Mono.just(true);
                     }
 
-                    // 2. Только друзья
-                    return friendsRepository
-                            .findFriendshipBySenderIdAndReceiverId(
-                                    requesterId,
-                                    targetUser.getId(),
-                                    FriendStatus.Accepted
-                            )
+                    // 2. Только друзья и заявки
+                    return friendsRepository.findBySenderIdAndReceiverId(requesterId, targetUser.getId())
+                            .switchIfEmpty(friendsRepository.findBySenderIdAndReceiverId(targetUser.getId(), requesterId))
+                            .filter(f -> f.getStatus() == FriendStatus.Accepted || f.getStatus() == FriendStatus.Pending)
                             .hasElement();
                 })
                 .map(user -> {
                     UserResponse response = userMapper.toUserResponse(user);
 
-                    // 🔥 ВАЖНО: онлайн через WebSocket
+
                     boolean isOnline = webSocketSessionRegistry.get(user.getId()) != null;
                     response.setOnline(isOnline);
 
@@ -68,7 +65,7 @@ public class UserService {
         return userRepository.updateLastSeen(userId, LocalDateTime.now());
     }
     public Flux<String> getFriendIds(String userId) {
-        return friendsRepository.findAllAcceptedFriendsIds(userId,FriendStatus.Accepted);
+        return friendsRepository.findAllAcceptedFriendsIds(userId);
     }
 
     public Mono<Void> broadcastStatus(String userId, boolean isOnline) {

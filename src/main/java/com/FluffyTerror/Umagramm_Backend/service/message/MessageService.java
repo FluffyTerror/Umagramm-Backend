@@ -39,7 +39,7 @@ import java.util.List;
 public class MessageService {
     private final MessageRepository messageRepository;
     private final ChatRepository chatRepository;
-    private final ChatMemberRepository chatMemberRepository; // Добавляем
+    private final ChatMemberRepository chatMemberRepository;
     private final AttachmentRepository attachmentRepository;
     private final MessageMapper mapper;
     private final AttachmentService attachmentService;

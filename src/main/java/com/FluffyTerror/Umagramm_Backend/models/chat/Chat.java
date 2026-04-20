@@ -39,6 +39,8 @@ public class Chat extends BaseAuditingEntity implements Persistable<String> {
     @Column("type")
     private ChatType chatType;
 
+    private Integer keyVersion = 1;
+
     @Override
     public boolean isNew() {
         return isNew || id == null;

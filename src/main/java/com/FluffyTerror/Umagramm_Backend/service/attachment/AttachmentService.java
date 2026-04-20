@@ -80,6 +80,7 @@ public class AttachmentService {
                                         attachment.getContentType(),
                                         new ByteArrayResource(bytes)
                                 ))
+
                                 // Если в кэше пусто, идем на диск
                                 .switchIfEmpty(readFromDiskAndCache(attachment, cacheKey))
                 );

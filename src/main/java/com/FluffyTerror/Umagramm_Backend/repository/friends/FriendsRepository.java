@@ -31,7 +31,7 @@ public interface FriendsRepository extends ReactiveCrudRepository<Friend, String
         END AS friend_id
     FROM friends fr
     WHERE (fr.sender_id = :userId OR fr.receiver_id = :userId)
-      AND fr.status = :status
+      AND fr.status IN ('Accepted', 'Pending')
 """)
-    Flux<String> findAllAcceptedFriendsIds(String userId, FriendStatus status);
+    Flux<String> findAllAcceptedFriendsIds(String userId);
 }

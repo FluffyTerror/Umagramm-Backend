@@ -16,7 +16,7 @@ public class WebSocketConfig {
     @Bean
     public HandlerMapping webSocketHandler(WebSocketSessionHandler handler){
         Map<String, WebSocketHandler> map = new HashMap<>();
-        map.put("/ws/messages", handler);
+        map.put("/ws/messages", handler);//--TODO после деплоя настроить wss
         int order = 1; // before annotated controllers
         return new SimpleUrlHandlerMapping(map, order);
     }

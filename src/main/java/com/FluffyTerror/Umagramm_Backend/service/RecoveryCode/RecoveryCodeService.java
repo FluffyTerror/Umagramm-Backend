@@ -32,7 +32,8 @@ public class RecoveryCodeService {
         return userRecoveryCodeRepository.updateVaultData(
                         userId,
                         request.encryptedPrivateKey(),
-                        request.salt()
+                        request.salt(),
+                        request.nonce()
                 )
                 .flatMap(updatedRows -> {
                     if (updatedRows == 0) {
@@ -52,7 +53,7 @@ public class RecoveryCodeService {
             }
 
 
-            return refreshTokenService.create(UUID.fromString(user.getId())).map(rt -> new RestoreResponse(jwtService.generateAccessToken(user), rt.getToken(), vault.getEncryptedPrivateKey(), vault.getSalt()));
+            return refreshTokenService.create(UUID.fromString(user.getId())).map(rt -> new RestoreResponse(jwtService.generateAccessToken(user), rt.getToken(), vault.getEncryptedPrivateKey(), vault.getSalt(),vault.getNonce()));
         }));
     }
 }

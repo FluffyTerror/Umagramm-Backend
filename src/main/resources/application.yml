@@ -10,6 +10,13 @@ spring:
     password: gigapass1488
     locations: classpath:db/migration
     baseline-on-migrate: true
+    spring:
+      codec:
+        multipart:
+          # Лимит на один файл
+          max-disk-usage-per-part: 2GB
+          # Общий лимит на весь запрос (если файлов несколько)
+          max-in-memory-size: 50MB
   springdoc:
     default-produces-media-type: application/json
   logging:
@@ -30,3 +37,4 @@ application:
   file:
     uploads:
       media-output-path: ./uploads
+

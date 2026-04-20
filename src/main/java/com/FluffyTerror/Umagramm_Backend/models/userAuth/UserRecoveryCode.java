@@ -20,6 +20,8 @@ public class UserRecoveryCode implements Persistable<String> {
 
     private String encryptedPrivateKey;
 
+    private String nonce;
+
     @Override
     public String getId() {
         return userId;

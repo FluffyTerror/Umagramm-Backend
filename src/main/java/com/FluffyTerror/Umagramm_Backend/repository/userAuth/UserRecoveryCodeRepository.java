@@ -10,6 +10,6 @@ import reactor.core.publisher.Mono;
 @Repository
 public interface UserRecoveryCodeRepository extends ReactiveCrudRepository<UserRecoveryCode,String> {
     @Modifying
-    @Query("UPDATE recovery_code SET encrypted_private_key = :encryptedKey, salt = :salt WHERE user_id = :userId")
-    Mono<Integer> updateVaultData(String userId, String encryptedKey, String salt);
+    @Query("UPDATE recovery_code SET encrypted_private_key = :encryptedKey, salt = :salt, nonce = :nonce WHERE user_id = :userId")
+    Mono<Integer> updateVaultData(String userId, String encryptedKey, String salt,String nonce);
 }

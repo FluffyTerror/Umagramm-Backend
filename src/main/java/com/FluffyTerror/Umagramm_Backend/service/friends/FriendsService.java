@@ -45,15 +45,14 @@ public class FriendsService {
                 });
     }
 
-    public Mono<Friend> acceptFriendRequest(String senderId, String receiverId) {
-        return friendsRepository.findBySenderIdAndReceiverId(senderId, receiverId)
+    public Mono<Friend> acceptFriendRequest(String acceptorId, String originalSenderId) {
+        return friendsRepository.findBySenderIdAndReceiverId(originalSenderId, acceptorId)
                 .switchIfEmpty(Mono.error(new IllegalArgumentException("No existing friend requests")))
                 .flatMap(friendRequest -> {
                     friendRequest.setStatus(FriendStatus.Accepted);
                     friendRequest.setUpdatedAt(LocalDateTime.now());
                     return friendsRepository.save(friendRequest);
                 });
-
     }
 
     public Mono<Friend> declineFriendRequest(String senderId, String receiverId) {

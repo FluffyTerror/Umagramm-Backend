@@ -4,6 +4,7 @@ public record RestoreResponse(
         String accessToken,
         String refreshToken,
         String encryptedPrivateKey,
-        String salt                 // нужна для подбора ключа к recovery коду
+        String salt,
+        String nonce// нужна для подбора ключа к recovery коду
 ) {
 }
