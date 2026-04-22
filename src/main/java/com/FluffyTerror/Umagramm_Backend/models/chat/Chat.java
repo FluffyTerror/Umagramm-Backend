@@ -31,7 +31,7 @@ public class Chat extends BaseAuditingEntity implements Persistable<String> {
 
     private String title; // Название для групп, null для личек
 
-    private String avatarUrl; // Общий аватар для группы
+    private Long avatarId; // Общий аватар для группы
 
     @Transient
     private boolean isNew = false; // По умолчанию false

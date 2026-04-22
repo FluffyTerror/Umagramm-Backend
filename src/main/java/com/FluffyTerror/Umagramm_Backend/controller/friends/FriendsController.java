@@ -33,4 +33,5 @@ public class FriendsController {
     public Flux<FriendResponse> findAllIncomingRequests(@AuthenticationPrincipal User receiver) {
         return friendsService.getAllIncomingRequests(receiver.getId());
     }
+
 }

@@ -13,6 +13,7 @@ public record ChatResponse (
          Long unreadCount,
          String lastMessage,
          LocalDateTime lastMessageTime,
-         boolean isRecipientOnline
+         boolean isRecipientOnline,
+         Long avatarId
 
 ){}

@@ -5,6 +5,7 @@ import com.FluffyTerror.Umagramm_Backend.enums.FriendStatus;
 import com.FluffyTerror.Umagramm_Backend.enums.MemberRole;
 import com.FluffyTerror.Umagramm_Backend.enums.MessageState;
 import com.FluffyTerror.Umagramm_Backend.exceptions.FriendNotFoundException;
+import com.FluffyTerror.Umagramm_Backend.models.attachment.Attachment;
 import com.FluffyTerror.Umagramm_Backend.models.chat.Chat;
 import com.FluffyTerror.Umagramm_Backend.models.chatMember.ChatMember;
 import com.FluffyTerror.Umagramm_Backend.models.friends.Friend;
@@ -15,9 +16,12 @@ import com.FluffyTerror.Umagramm_Backend.repository.chatMember.ChatMemberReposit
 import com.FluffyTerror.Umagramm_Backend.repository.friends.FriendsRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.message.MessageRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.user.UserRepository;
+import com.FluffyTerror.Umagramm_Backend.requests.CreateGroupChatRequest;
 import com.FluffyTerror.Umagramm_Backend.responses.chat.ChatResponse;
+import com.FluffyTerror.Umagramm_Backend.service.attachment.AttachmentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +29,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -37,6 +42,7 @@ public class ChatService {
     private final MessageRepository messageRepository;
     private final FriendsRepository friendsRepository;
     private final DatabaseClient databaseClient;
+    private final AttachmentService attachmentService;
 
     /**
      * Создает новый ПРИВАТНЫЙ чат или возвращает существующий с полной информацией
@@ -62,45 +68,78 @@ public class ChatService {
                     chat.markNew();
                     return chatRepository.save(chat)
                             .flatMap(savedChat -> {
-                                ChatMember m1 = createMember(savedChat.getId(), creatorId, null);
-                                ChatMember m2 = createMember(savedChat.getId(), partnerId, null);
+                                ChatMember m1 = createMember(savedChat.getId(), creatorId, null, MemberRole.MEMBER);
+                                ChatMember m2 = createMember(savedChat.getId(), partnerId, null,MemberRole.MEMBER);
                                 return chatMemberRepository.save(m1)
                                         .then(chatMemberRepository.save(m2))
                                         .thenReturn(savedChat);
                             });
                 });
     }
+    @Transactional
+    public Mono<ChatResponse> createGroupChat(String creatorId, CreateGroupChatRequest request, Mono<FilePart> filePart) {
+
+        return filePart
+                // 1. Используем новый метод, который возвращает Mono<Attachment>
+                .flatMap(fp -> attachmentService.saveGroupAvatar(fp, creatorId))
+                .map(Attachment::getId) // Теперь тут объект Attachment, берем его ID
+                .defaultIfEmpty(1L)
+                .flatMap(avatarId -> {
+                    Chat chat = new Chat();
+                    chat.setId(UUID.randomUUID().toString());
+                    chat.setChatType(ChatType.GROUP);
+                    chat.setTitle(request.title());
+                    chat.setAvatarId(avatarId);
+                    chat.markNew();
+
+                    return chatRepository.save(chat)
+                            .flatMap(savedChat -> {
+                                ChatMember admin = createMember(savedChat.getId(), creatorId, null, MemberRole.ADMIN);
+                                List<ChatMember> members = request.usersId().stream()
+                                        .map(uId -> createMember(savedChat.getId(), uId, creatorId, MemberRole.MEMBER))
+                                        .toList();
+
+                                return chatMemberRepository.save(admin)
+                                        .thenMany(Flux.fromIterable(members))
+                                        .flatMap(chatMemberRepository::save)
+                                        .then(Mono.just(savedChat)); // .then() превращает Flux в Mono<Void>
+                            });
+                })
+                .flatMap(savedChat -> enrichChatWithDetails(savedChat, creatorId));
+    }
 
     /**
      * Маппинг Chat -> ChatResponse
      */
     private Mono<ChatResponse> enrichChatWithDetails(Chat chat, String currentUserId) {
-        // Используем один zip, чтобы получить ID партнера и имя чата
-        return Mono.zip(
-                getPartnerId(chat.getId(), currentUserId).defaultIfEmpty(""),
-                getChatName(chat, currentUserId)
-        ).flatMap(tuple -> {
-            String partnerId = tuple.getT1();
-            String chatDisplayName = tuple.getT2();
+        boolean isGroup = chat.getChatType() == ChatType.GROUP;
 
-            // Затем используем второй zip для получения статусов и сообщений
-            return Mono.zip(
-                    getUnreadMessages(chat.getId(), currentUserId),
-                    isPartnerOnline(partnerId, chat.getChatType()),
-                    getLastMessage(chat.getId()).defaultIfEmpty(new Message()) // Заглушка, если сообщений нет
-            ).map(t -> {
-                // t.getT1() -> unread, t.getT2() -> online, t.getT3() -> lastMessage
-                return createResponse(
-                        chat,
-                        currentUserId,
-                        partnerId,
-                        t.getT1(),
-                        t.getT2(),
-                        t.getT3(),
-                        chatDisplayName
-                );
-            });
-        });
+        // 1. Определяем ID партнера: для групп это всегда пустая строка/null, для привата — ищем в базе
+        Mono<String> partnerIdMono = isGroup
+                ? Mono.just("")
+                : getPartnerId(chat.getId(), currentUserId).defaultIfEmpty("");
+
+        // 2. Объединяем получение метаданных (имя и ID партнера)
+        return Mono.zip(partnerIdMono, getChatName(chat, currentUserId))
+                .flatMap(meta -> {
+                    String partnerId = meta.getT1();
+                    String displayName = meta.getT2();
+
+                    // 3. Собираем статистику: непрочитанные, статус "в сети" и последнее сообщение
+                    return Mono.zip(
+                            getUnreadMessages(chat.getId(), currentUserId),
+                            isPartnerOnline(partnerId, chat.getChatType()),
+                            getLastMessage(chat.getId()).defaultIfEmpty(new Message())
+                    ).map(stats -> createResponse(
+                            chat,
+                            currentUserId,
+                            isGroup ? null : partnerId, // receiverId для групп не нужен
+                            stats.getT1(), // unread
+                            stats.getT2(), // online
+                            stats.getT3(), // lastMessage
+                            displayName
+                    ));
+                });
     }
 
     private ChatResponse createResponse(Chat chat, String currentUserId, String receiverId, Long unread, Boolean online, Message msg, String chatName) {
@@ -118,7 +157,8 @@ public class ChatService {
                 unread,
                 msg != null ? msg.getContent() : null,
                 msg != null ? msg.getCreatedDate() : null,
-                online
+                online,
+                chat.getAvatarId()
         );
     }
 
@@ -129,6 +169,11 @@ public class ChatService {
                 .filter(member -> !member.getUserId().equals(currentUserId))
                 .next()
                 .map(ChatMember::getUserId);
+    }
+    private Flux<String> getPartnersId(String chatId, String currentUserId) {
+        return chatMemberRepository.findAllByChatId(chatId)
+                .filter(member -> !member.getUserId().equals(currentUserId)).map(ChatMember::getUserId);
+
     }
 
     public Mono<Long> getUnreadMessages(String chatId, String currentUserId) {
@@ -147,11 +192,11 @@ public class ChatService {
                 .defaultIfEmpty(false);
     }
 
-    private ChatMember createMember(String chatId, String userId,String invitedBy) {
+    private ChatMember createMember(String chatId, String userId,String invitedBy, MemberRole role) {
         ChatMember member = new ChatMember();
         member.setChatId(chatId);
         member.setUserId(userId);
-        member.setRole(MemberRole.MEMBER);
+        member.setRole(role);
         member.setJoinedAt(LocalDateTime.now());
         member.setNew(true);
         member.setInvitedBy(invitedBy);

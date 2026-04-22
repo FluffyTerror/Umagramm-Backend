@@ -6,7 +6,9 @@ import com.FluffyTerror.Umagramm_Backend.models.attachment.Attachment;
 import com.FluffyTerror.Umagramm_Backend.repository.attachment.AttachmentRepository;
 
 
+import com.FluffyTerror.Umagramm_Backend.requests.media.UploadInitRequest;
 import com.FluffyTerror.Umagramm_Backend.responses.attachment.ResourceData;
+import com.FluffyTerror.Umagramm_Backend.responses.media.UploadInitResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
@@ -16,16 +18,19 @@ import org.springframework.core.io.UrlResource; // Если решишь исп�
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-import java.nio.file.AccessDeniedException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.channels.FileChannel;
+import java.nio.file.*;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.UUID;
 
 
 @Slf4j
@@ -46,6 +51,34 @@ public class AttachmentService {
         this.attachmentRepository = attachmentRepository;
         this.redisTemplate = redisTemplate;
         this.fileUploadPath = fileUploadPath;
+    }
+    public Mono<Attachment> saveGroupAvatar(FilePart filePart, String senderId) {
+        String filename = System.currentTimeMillis() + "_" + filePart.filename();
+        // Определяем путь
+        Path target = Paths.get(fileUploadPath, "users", senderId, filename)
+                .toAbsolutePath()
+                .normalize();
+
+        return Mono.fromCallable(() -> {
+                    if (!Files.exists(target.getParent())) {
+                        Files.createDirectories(target.getParent());
+                    }
+                    return target;
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(filePart::transferTo) // Сохраняем файл
+                .then(Mono.defer(() -> {
+                    // Создаем сущность для БД
+                    Attachment attachment = new Attachment();
+                    attachment.setFilename(filename);
+                    attachment.setUrl(target.toString());
+                    attachment.setMessageId(null);
+                    attachment.setContentType(filePart.headers().getContentType().toString());
+                    attachment.setCreatedAt(Instant.now());
+                     attachment.setType(MessageType.IMAGE);
+
+                    return attachmentRepository.save(attachment); // Сохраняем в БД и возвращаем сущность с ID
+                }));
     }
 
     public Mono<String> saveFile(FilePart filePart, String senderId) {
@@ -117,6 +150,76 @@ public class AttachmentService {
                             attachment.getContentType(),
                             new FileSystemResource(path)
                     ));
+                });
+    }
+    //--TODO переделать загрузку медиа
+    public Mono<UploadInitResponse> initUploadSession(UploadInitRequest request, String userId) {
+        String uploadId = UUID.randomUUID().toString();
+        String redisKey = "upload_session:" + uploadId;
+
+        // Сохраняем в Redis метаданные: кто грузит, имя файла, сколько всего чанков ждем
+        Map<String, String> meta = Map.of(
+                "userId", userId,
+                "filename", request.getFilename(),
+                "totalChunks", String.valueOf(request.getTotalChunks())
+        );
+
+        return redisTemplate.opsForHash().putAll(redisKey, meta)
+                .then(redisTemplate.expire(redisKey, Duration.ofDays(1))) // Сессия живет сутки
+                .thenReturn(new UploadInitResponse(uploadId));
+    }
+    public Mono<Void> saveChunk(String uploadId, int chunkIndex, FilePart filePart) {
+        Path tmpFolder = Paths.get(fileUploadPath, "tmp", uploadId);
+        Path chunkPath = tmpFolder.resolve("chunk_" + chunkIndex);
+
+        return Mono.fromCallable(() -> {
+                    if (!Files.exists(tmpFolder)) {
+                        Files.createDirectories(tmpFolder);
+                    }
+                    return chunkPath;
+                })
+                .subscribeOn(Schedulers.boundedElastic())
+                .flatMap(filePart::transferTo);
+    }
+    public Mono<Void> mergeChunksAndSave(String uploadId, String chatId, Authentication auth) {
+        String redisKey = "upload_session:" + uploadId;
+
+        // 1. Достаем метаданные из Redis
+        return redisTemplate.opsForHash().entries(redisKey).collectMap(Map.Entry::getKey, Map.Entry::getValue)
+                .flatMap(meta -> {
+                    String userId = (String) meta.get("userId");
+                    String filename = System.currentTimeMillis() + "_" + meta.get("filename");
+                    int totalChunks = Integer.parseInt((String) meta.get("totalChunks"));
+
+                    Path tmpFolder = Paths.get(fileUploadPath, "tmp", uploadId);
+                    Path finalDest = Paths.get(fileUploadPath, "users", userId, filename);
+
+                    return Mono.fromCallable(() -> {
+                        if (!Files.exists(finalDest.getParent())) {
+                            Files.createDirectories(finalDest.getParent());
+                        }
+
+                        // 2. Склеиваем файлы через FileChannel (очень быстро и без расхода RAM)
+                        try (FileChannel destChannel = FileChannel.open(finalDest, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.APPEND)) {
+                            for (int i = 0; i < totalChunks; i++) {
+                                Path chunk = tmpFolder.resolve("chunk_" + i);
+                                try (FileChannel srcChannel = FileChannel.open(chunk, StandardOpenOption.READ)) {
+                                    srcChannel.transferTo(0, srcChannel.size(), destChannel);
+                                }
+                                Files.deleteIfExists(chunk); // Удаляем кусок после склейки
+                            }
+                        }
+                        Files.deleteIfExists(tmpFolder); // Удаляем временную папку
+
+                        return finalDest;
+                    }).subscribeOn(Schedulers.boundedElastic());
+                })
+                .flatMap(finalPath -> {
+                    // 3. Файл склеен! Теперь создаем сущность Attachment в БД
+                    // и вызываем твой старый добрый messageService.uploadMediaMessage
+
+                    // redisTemplate.delete(redisKey).subscribe(); // Чистим сессию
+                    return Mono.empty(); // Заглушка, тут вызовешь сохранение в базу
                 });
     }
 }

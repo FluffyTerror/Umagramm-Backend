@@ -34,4 +34,5 @@ public interface FriendsRepository extends ReactiveCrudRepository<Friend, String
       AND fr.status IN ('Accepted', 'Pending')
 """)
     Flux<String> findAllAcceptedFriendsIds(String userId);
+
 }

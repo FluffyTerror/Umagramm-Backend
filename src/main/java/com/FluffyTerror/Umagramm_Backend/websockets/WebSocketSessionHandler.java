@@ -159,15 +159,17 @@ public class WebSocketSessionHandler implements WebSocketHandler {
                                 ));
                             });
                 }
-                case "KEY_EXCHANGE": {
+                case "KEY_EXCHANGE_REQUEST","KEY_EXCHANGE_RESPONSE":
+                {
                     String targetId = json.get("targetId").asText();
                     String myPublicKey = json.get("publicKey").asText();
+                    String currentType = json.get("type").asText();
 
                     WebSocketSession targetSession = webSocketSessionRegistry.get(targetId);
 
                     if (targetSession != null && targetSession.isOpen()) {
                         Map<String, String> response = Map.of(
-                                "type", "KEY_EXCHANGE_COMPLETE",
+                                "type", currentType,
                                 "fromId", userId,
                                 "publicKey", myPublicKey
                         );
