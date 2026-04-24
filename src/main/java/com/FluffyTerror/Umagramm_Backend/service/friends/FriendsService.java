@@ -80,4 +80,8 @@ public class FriendsService {
                                 ))
                 );
     }
+
+    public Flux<String> getFriendsByChatId(String chatId, String userId) {
+        return friendsRepository.findFriendsByChatId(chatId,userId);
+    }
 }

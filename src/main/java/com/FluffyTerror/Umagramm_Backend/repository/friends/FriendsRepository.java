@@ -35,4 +35,17 @@ public interface FriendsRepository extends ReactiveCrudRepository<Friend, String
 """)
     Flux<String> findAllAcceptedFriendsIds(String userId);
 
+    @Query("""
+    SELECT CASE 
+        WHEN fr.sender_id = :userId THEN fr.receiver_id 
+        ELSE fr.sender_id 
+    END
+    FROM friends fr
+    JOIN chat_members cm ON (cm.user_id = fr.sender_id OR cm.user_id = fr.receiver_id)
+    WHERE cm.chat_id = :chatId 
+      AND fr.status = 'Accepted' 
+      AND (fr.sender_id = :userId OR fr.receiver_id = :userId)
+      AND cm.user_id != :userId
+    """)
+    Flux<String> findFriendsByChatId(String chatId, String userId);
 }

@@ -211,6 +211,85 @@ public class WebSocketSessionHandler implements WebSocketHandler {
                                 return Mono.empty();
                             });
                 }
+                case "GROUP_KEY_DISTRIBUTION": {
+                    String chatId = json.get("chatId").asText();
+                    String encryptedKey = json.get("encryptedKey").asText();
+                    log.info("Incoming GROUP_KEY_DISTRIBUTION msg {}",json);
+                    // Проверяем наличие версии ключа (полезно для re-keying при кике)
+                    long keyVersion = json.has("keyVersion") ? json.get("keyVersion").asLong() : 1L;
+
+                    // 1. Получаем список ID друзей в этом чате
+                    return friendsService.getFriendsByChatId(chatId, userId)
+                            // Если запрос возвращает Flux<String>, map не нужен. Если Flux<Friend>, то:
+                            // .map(Friend::getFriendId)
+                            .collectList()
+                            .flatMap(allowedFriendIds -> {
+                                List<Mono<Void>> sendTasks = new ArrayList<>();
+
+                                // 2. Рассылаем один и тот же зашифрованный блок всем друзьям онлайн
+                                for (String targetId : allowedFriendIds) {
+                                    WebSocketSession targetSession = webSocketSessionRegistry.get(targetId);
+
+                                    if (targetSession != null && targetSession.isOpen()) {
+                                        Map<String, Object> response = Map.of(
+                                                "type", "GROUP_KEY_RECEIVED",
+                                                "chatId", chatId,
+                                                "fromId", userId,
+                                                "encryptedKey", encryptedKey,
+                                                "keyVersion", keyVersion
+                                        );
+                                        sendTasks.add(sendJson(targetSession, response));
+                                    }
+                                }
+
+                                // 3. Выполняем рассылку параллельно
+                                return Mono.when(sendTasks);
+                            });
+                }
+                case "IS_KEY_REQUIRED": {
+                    String chatId = json.get("chatId").asText();
+                    log.info("Incoming IS_KEY_REQUIRED msg {}",json);
+                    // userId здесь — это ID того, КТО спрашивает (отправитель сообщения)
+
+                    // 1. Находим всех друзей в этом чате
+                    return friendsService.getFriendsByChatId(chatId, userId)
+                            .collectList()
+                            .flatMap(allowedFriendIds -> {
+                                List<Mono<Void>> sendTasks = new ArrayList<>();
+
+                                for (String targetId : allowedFriendIds) {
+                                    WebSocketSession targetSession = webSocketSessionRegistry.get(targetId);
+
+                                    // 2. Проверяем, в сети ли друг
+                                    if (targetSession != null && targetSession.isOpen()) {
+                                        Map<String, Object> response = Map.of(
+                                                "type", "IS_KEY_REQUIRED",
+                                                "chatId", chatId,
+                                                "senderId", userId // Пересылаем ID того, кто готов дать ключ
+                                        );
+                                        sendTasks.add(sendJson(targetSession, response));
+                                    }
+                                }
+                                // 3. Рассылаем уведомление всем друзьям в чате
+                                return Mono.when(sendTasks);
+                            });
+                }case "KEY_NEEDED_REPLY": {
+                    String chatId = json.get("chatId").asText();
+                    String targetId = json.get("targetId").asText(); // ID того, кто прислал IS_KEY_REQUIRED (Админ)
+                    log.info("Incoming KEY_NEEDED_REPLY msg {}",json);
+                    WebSocketSession targetSession = webSocketSessionRegistry.get(targetId);
+
+                    if (targetSession != null && targetSession.isOpen()) {
+                        Map<String, Object> response = Map.of(
+                                "type", "KEY_NEEDED_REPLY",
+                                "chatId", chatId,
+                                "fromId", userId // ID того, кому нужен ключ (Кент)
+                        );
+                        return sendJson(targetSession, response);
+                    }
+                    return Mono.empty();
+                }
+
 
                 default:
                     log.warn("Unknown WS type: {}", type);
