@@ -1,8 +1,6 @@
 package com.FluffyTerror.Umagramm_Backend.service.chat;
 
-import com.FluffyTerror.Umagramm_Backend.enums.ChatType;
-import com.FluffyTerror.Umagramm_Backend.enums.FriendStatus;
-import com.FluffyTerror.Umagramm_Backend.enums.MemberRole;
+import com.FluffyTerror.Umagramm_Backend.enums.*;
 import com.FluffyTerror.Umagramm_Backend.exceptions.FriendNotFoundException;
 import com.FluffyTerror.Umagramm_Backend.models.attachment.Attachment;
 import com.FluffyTerror.Umagramm_Backend.models.chat.Chat;
@@ -21,6 +19,7 @@ import com.FluffyTerror.Umagramm_Backend.responses.ChatMemberResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.attachment.AttachmentResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.chat.ChatResponse;
 import com.FluffyTerror.Umagramm_Backend.service.attachment.AttachmentService;
+import com.FluffyTerror.Umagramm_Backend.websockets.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.codec.multipart.FilePart;
@@ -33,6 +32,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -46,6 +46,7 @@ public class ChatService {
     private final FriendsRepository friendsRepository;
     private final DatabaseClient databaseClient;
     private final AttachmentService attachmentService;
+    private final WebSocketNotificationService webSocketNotificationService;
 
     /**
      * Создает новый ПРИВАТНЫЙ чат или возвращает существующий с полной информацией
@@ -203,59 +204,50 @@ public class ChatService {
 
     public Mono<ChatMember> addChatMemberToChat(AddChatMemberRequest request, String initiatorId) {
         return chatRepository.findById(request.chatId())
-                // 1. Проверяем, что это группа
                 .filter(chat -> chat.getChatType() == ChatType.GROUP)
-                .switchIfEmpty(Mono.error(() -> new IllegalArgumentException("Adding members is only allowed for group chats")))
-
-                // 2. ВАЖНО: Проверяем инициатора через chatMemberRepository!
+                .switchIfEmpty(Mono.error(() -> new IllegalArgumentException("Only for group chats")))
                 .flatMap(chat -> chatMemberRepository.findByChatIdAndUserId(chat.getId(), initiatorId))
-                .switchIfEmpty(Mono.error(() -> new IllegalArgumentException("You are not a member of this chat")))
-
-                // 3. Проверяем, не добавлен ли уже целевой юзер
+                .switchIfEmpty(Mono.error(() -> new IllegalArgumentException("You are not in this chat")))
                 .flatMap(initiatorMember -> chatMemberRepository.findByChatIdAndUserId(request.chatId(), request.userId())
-                        .flatMap(existing -> Mono.<ChatMember>error(new IllegalArgumentException("User is already in the chat")))
+                        .flatMap(existing -> Mono.<ChatMember>error(new IllegalArgumentException("Already in chat")))
                         .switchIfEmpty(Mono.defer(() -> {
-                            // 4. Если всё ок — создаем и сохраняем
                             ChatMember chatMember = createMember(request.chatId(), request.userId(), initiatorId, MemberRole.MEMBER);
-                            return chatMemberRepository.save(chatMember);
+
+                            return chatMemberRepository.save(chatMember)
+                                    .flatMap(savedMember -> userRepository.findById(request.userId())
+                                            .flatMap(user -> {
+                                                String name = (user.getFirstName() + " " + user.getLastName()).trim();
+                                                return saveSystemMessage(request.chatId(), name + " joined the chat",initiatorId);
+                                            })
+                                            .thenReturn(savedMember)); // Возвращаем участника для API
                         }))
                 );
     }
     @Transactional
     public Mono<Void> kickChatMember(KickChatMemberRequest request, String initiatorId) {
-        // 1. Проверяем, что чат существует и это группа (из приватки кикнуть нельзя)
         return chatRepository.findById(request.chatId())
-                .switchIfEmpty(Mono.error(new IllegalArgumentException("Chat not found"))) // Замени на свои кастомные Exception
                 .filter(chat -> chat.getChatType() == ChatType.GROUP)
-                .switchIfEmpty(Mono.error(new IllegalArgumentException("Cannot kick users from a private chat")))
-
-                // 2. Достаем инициатора и цель параллельно
                 .then(Mono.zip(
-                        chatMemberRepository.findByChatIdAndUserId(request.chatId(), initiatorId)
-                                .switchIfEmpty(Mono.error(new IllegalArgumentException("You are not a member of this chat"))),
-                        chatMemberRepository.findByChatIdAndUserId(request.chatId(), request.userId())
-                                .switchIfEmpty(Mono.error(new IllegalArgumentException("Target user is not in this chat")))
+                        chatMemberRepository.findByChatIdAndUserId(request.chatId(), initiatorId),
+                        chatMemberRepository.findByChatIdAndUserId(request.chatId(), request.userId()),
+                        userRepository.findById(request.userId()) // Достаем данные юзера для текста
                 ))
                 .flatMap(tuple -> {
                     ChatMember initiator = tuple.getT1();
                     ChatMember target = tuple.getT2();
+                    User targetUser = tuple.getT3();
 
-                    // 3. Логика прав доступа
                     boolean isAdmin = initiator.getRole() == MemberRole.ADMIN;
-                    boolean isInviter = initiatorId.equals(target.getInvitedBy());
-                    boolean isSelfKick = initiatorId.equals(request.userId()); // Позволяем юзеру выйти самому (ливнуть из группы)
+                    boolean isSelfKick = initiatorId.equals(request.userId());
 
-                    if (isAdmin || isInviter || isSelfKick) {
+                    if (isAdmin || isSelfKick) {
+                        String name = (targetUser.getFirstName() + " " + targetUser.getLastName()).trim();
+                        String actionText = isSelfKick ? name + " left the chat" : name + " was removed from the chat";
 
-                         //Опционально: защита от кика других админов обычными инвайтерами
-                         if (!isAdmin && target.getRole() == MemberRole.ADMIN) {
-                             return Mono.error(new AccessDeniedException("You cannot kick an admin"));
-                         }
-
-                        // 4. Удаляем связь (или меняем статус на LEFT/KICKED, если вы храните историю)
-                        return chatMemberRepository.delete(target);
+                        return chatMemberRepository.delete(target)
+                                .then(saveSystemMessage(request.chatId(), actionText, initiatorId));
                     } else {
-                        return Mono.error(new IllegalArgumentException("You do not have permission to kick this user"));
+                        return Mono.error(new AccessDeniedException("No permission"));
                     }
                 });
     }
@@ -280,12 +272,30 @@ public class ChatService {
                         ))
                 ).collectList();
     }
-//    public AttachmentResponse toAttachmentResponse(ChatMember attachment) {
-//        return AttachmentResponse.builder()
-//                .id(attachment.getId())
-//                .type(attachment.getType())
-//                .url("/api/v1/attachments/" + attachment.getId())
-//                .filename(attachment.getFilename())
-//                .build();
-//    }
+    private Mono<Void> saveSystemMessage(String chatId, String text,String initiatorId) {
+        Message systemMsg = new Message();
+        systemMsg.setChatId(chatId);
+        systemMsg.setContent(text);
+        systemMsg.setMessageType(MessageType.SYSTEM);
+        systemMsg.setSenderId(initiatorId);
+        systemMsg.setCreatedDate(LocalDateTime.now());
+        systemMsg.setMessageState(MessageState.SENT);
+
+        return messageRepository.save(systemMsg)
+                .flatMap(savedMsg -> {
+                    // 1. Находим всех участников чата
+                    return chatMemberRepository.findAllByChatId(chatId)
+                            .map(ChatMember::getUserId)
+                            .collectList()
+                            .flatMap(userIds -> {
+                                // 2. Рассылаем через твой WebSocket-сервис
+                                // Убедись, что на фронте этот JSON поймут
+                                return webSocketNotificationService.broadcastToChat(userIds, Map.of(
+                                        "type", "NEW_MESSAGE",
+                                        "chatId", chatId,
+                                        "message", savedMsg
+                                ));
+                            });
+                }).then();
+    }
 }
