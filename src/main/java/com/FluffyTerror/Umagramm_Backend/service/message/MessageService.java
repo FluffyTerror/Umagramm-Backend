@@ -52,6 +52,7 @@ public class MessageService {
     public Mono<MessageResponse> saveMessage(MessageRequest messageRequest, Authentication authentication) {
         User user = (User) authentication.getPrincipal();
         String senderId = user.getId();
+
         return chatRepository.findById(messageRequest.getChatId())
                 .switchIfEmpty(Mono.error(new Exception("Chat not found")))
                 .flatMap(chat -> {
@@ -62,12 +63,13 @@ public class MessageService {
                     message.setMessageType(messageRequest.getType());
                     message.setMessageState(MessageState.SENT);
                     message.setInitialisationVector(messageRequest.getInitialisationVector());
-                    message.setKeyVersion(message.getKeyVersion());
+
+                    // БЕРЕМ ВЕРСИЮ ИЗ ЧАТА
+                    message.setKeyVersion(chat.getKeyVersion());
+
                     return messageRepository.save(message)
-                            .flatMap(saved ->
-                                    notifyAllChatMembers(saved, chat, senderId, null)
-                                            // Заменяем thenReturn на then!
-                                            .then(mapper.toResponse(saved))
+                            .flatMap(saved -> notifyAllChatMembers(saved, chat, senderId, null)
+                                    .then(mapper.toResponse(saved))
                             );
                 });
     }
@@ -115,7 +117,7 @@ public class MessageService {
                     message.setSenderId(senderId);
                     message.setContent(messageTextRequest.getContent());
                     message.setInitialisationVector(messageTextRequest.getInitialisationVector());
-                    message.setKeyVersion(message.getKeyVersion());
+                    message.setKeyVersion(chat.getKeyVersion());
                     if (messageTextRequest.getContent() == null || messageTextRequest.getContent().trim().isEmpty()) {
                         message.setMessageType(MessageType.IMAGE);
                     } else {

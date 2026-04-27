@@ -22,11 +22,13 @@ import com.FluffyTerror.Umagramm_Backend.service.attachment.AttachmentService;
 import com.FluffyTerror.Umagramm_Backend.websockets.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -223,34 +225,41 @@ public class ChatService {
                         }))
                 );
     }
+
     @Transactional
     public Mono<Void> kickChatMember(KickChatMemberRequest request, String initiatorId) {
         return chatRepository.findById(request.chatId())
                 .filter(chat -> chat.getChatType() == ChatType.GROUP)
-                .then(Mono.zip(
+                .flatMap(chat -> Mono.zip(
                         chatMemberRepository.findByChatIdAndUserId(request.chatId(), initiatorId),
                         chatMemberRepository.findByChatIdAndUserId(request.chatId(), request.userId()),
-                        userRepository.findById(request.userId()) // Достаем данные юзера для текста
-                ))
-                .flatMap(tuple -> {
+                        userRepository.findById(request.userId())
+                ).flatMap(tuple -> {
                     ChatMember initiator = tuple.getT1();
                     ChatMember target = tuple.getT2();
                     User targetUser = tuple.getT3();
 
                     boolean isAdmin = initiator.getRole() == MemberRole.ADMIN;
                     boolean isSelfKick = initiatorId.equals(request.userId());
+                    boolean isInviter = initiatorId.equals(target.getInvitedBy());
 
-                    if (isAdmin || isSelfKick) {
+                    if (isAdmin || isSelfKick || isInviter) {
                         String name = (targetUser.getFirstName() + " " + targetUser.getLastName()).trim();
                         String actionText = isSelfKick ? name + " left the chat" : name + " was removed from the chat";
 
-                        return chatMemberRepository.delete(target)
+                        // 1. Инкрементируем версию ключа чата
+                        chat.setKeyVersion(chat.getKeyVersion() + 1);
+
+                        // 2. Сохраняем чат с новой версией, удаляем юзера и шлем системное сообщение
+                        return chatRepository.save(chat) // Обновляем версию в БД
+                                .then(chatMemberRepository.delete(target))
                                 .then(saveSystemMessage(request.chatId(), actionText, initiatorId));
                     } else {
-                        return Mono.error(new AccessDeniedException("No permission"));
+                        return Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN));
                     }
-                });
+                }));
     }
+
     public Mono<List<ChatMemberResponse>> getChatMembers(String chatId, String requesterId) {
         // 1. Проверяем, что запрашивающий сам является участником этого чата
         return chatMemberRepository.findByChatIdAndUserId(chatId, requesterId)

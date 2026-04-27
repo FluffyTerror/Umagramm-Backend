@@ -1,0 +1,2 @@
+ALTER TABLE chats
+ALTER COLUMN key_version TYPE BIGINT;
