@@ -21,5 +21,7 @@ public class MessageResponse {
     private String senderId;
     private String chatId;
     private LocalDateTime createdAt;
+    private String initialisationVector;
+    private Long keyVersion;
     private List<AttachmentResponse> attachments;
 }

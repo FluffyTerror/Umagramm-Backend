@@ -14,4 +14,11 @@ public interface AttachmentRepository extends ReactiveCrudRepository<Attachment,
 
     @Query("DELETE FROM attachments WHERE message_id = :messageId")
     Mono<Integer> deleteByMessageId(Long messageId);
+    @Query("""
+        SELECT a.* FROM attachments a 
+        INNER JOIN messages m ON a.message_id = m.id 
+        WHERE m.chat_id = :chatId
+        ORDER BY a.created_at DESC
+        """)
+    Flux<Attachment> findAttachmentsByChat(String chatId);
 }

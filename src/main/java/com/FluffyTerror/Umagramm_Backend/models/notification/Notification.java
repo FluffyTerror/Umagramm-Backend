@@ -20,5 +20,7 @@ public class Notification {//DTO class!!!
     private MessageType messageType;
     private NotificationType type;
     private List<AttachmentResponse> attachments;
+    private String initialisationVector;
+    private Long keyVersion;
     private Long messageId;
 }

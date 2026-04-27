@@ -28,16 +28,19 @@ public class MessageMapper {
                         .chatId(message.getChatId())
                         .createdAt(message.getCreatedDate())
                         .attachments(attachments)
+                        .initialisationVector(message.getInitialisationVector())
+                        .keyVersion(message.getKeyVersion())
                         .build()
                 );
     }
 
-    private AttachmentResponse toAttachmentResponse(Attachment attachment) {
+    public AttachmentResponse toAttachmentResponse(Attachment attachment) {
         return AttachmentResponse.builder()
                 .id(attachment.getId())
                 .type(attachment.getType())
                 .url("/api/v1/attachments/" + attachment.getId())
                 .filename(attachment.getFilename())
+                .messageId(attachment.getMessageId())
                 .build();
     }
 }

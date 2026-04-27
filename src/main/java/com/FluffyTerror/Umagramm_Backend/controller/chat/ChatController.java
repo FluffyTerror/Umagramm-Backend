@@ -1,7 +1,11 @@
 package com.FluffyTerror.Umagramm_Backend.controller.chat;
 
+import com.FluffyTerror.Umagramm_Backend.models.chatMember.ChatMember;
 import com.FluffyTerror.Umagramm_Backend.models.user.User;
+import com.FluffyTerror.Umagramm_Backend.requests.AddChatMemberRequest;
 import com.FluffyTerror.Umagramm_Backend.requests.CreateGroupChatRequest;
+import com.FluffyTerror.Umagramm_Backend.requests.KickChatMemberRequest;
+import com.FluffyTerror.Umagramm_Backend.responses.ChatMemberResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.chat.ChatResponse;
 import com.FluffyTerror.Umagramm_Backend.service.chat.ChatService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -12,6 +16,7 @@ import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
@@ -40,6 +45,23 @@ public class ChatController {
             @AuthenticationPrincipal User user
     ) {
         return chatService.createGroupChat(user.getId(), request, filePart);
+    }
+
+    @PostMapping("/add-chat-member")
+    public Mono<ChatMember> addChatMember(AddChatMemberRequest req,@AuthenticationPrincipal User user){
+        return chatService.addChatMemberToChat(req, user.getId());
+    }
+
+    @PostMapping("/kick-chat-member")
+    public Mono<Void> kickChatMember(KickChatMemberRequest req, @AuthenticationPrincipal User user){
+        return chatService.kickChatMember(req, user.getId());
+    }
+
+    @GetMapping("/{chatId}/members")
+    public Mono<List<ChatMemberResponse>> getChatMembers(
+            @PathVariable String chatId,
+            @AuthenticationPrincipal User user) {
+        return chatService.getChatMembers(chatId, user.getId());
     }
 
     /**

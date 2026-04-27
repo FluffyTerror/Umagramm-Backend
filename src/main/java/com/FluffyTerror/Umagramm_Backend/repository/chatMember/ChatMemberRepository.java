@@ -12,7 +12,7 @@ import reactor.core.publisher.Mono;
 public interface ChatMemberRepository extends ReactiveCrudRepository<ChatMember, Long> {
     Flux<ChatMember> findAllByUserId(String userId);
     Flux<ChatMember> findAllByChatId(String chatId);
-
+    Mono<ChatMember> findByChatIdAndUserId(String chatId, String userId);
     // Пример запроса для поиска общего приватного чата
     @Query("""
         SELECT c.* FROM chats c 

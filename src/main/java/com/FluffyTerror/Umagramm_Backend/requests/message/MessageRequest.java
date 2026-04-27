@@ -14,5 +14,7 @@ public class MessageRequest {
     private String senderId;
     private MessageType type;
     private String chatId;
+    private String initialisationVector;
+    private Long keyVersion;
 
 }

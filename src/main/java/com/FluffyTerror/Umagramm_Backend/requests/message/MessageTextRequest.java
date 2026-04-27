@@ -11,4 +11,6 @@ import lombok.Setter;
 @NoArgsConstructor
 public class MessageTextRequest {
     String content;
+    String initialisationVector;
+    Long keyVersion;
 }

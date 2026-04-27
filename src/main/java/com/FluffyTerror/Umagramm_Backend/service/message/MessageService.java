@@ -61,7 +61,8 @@ public class MessageService {
                     message.setSenderId(senderId);
                     message.setMessageType(messageRequest.getType());
                     message.setMessageState(MessageState.SENT);
-
+                    message.setInitialisationVector(messageRequest.getInitialisationVector());
+                    message.setKeyVersion(message.getKeyVersion());
                     return messageRepository.save(message)
                             .flatMap(saved ->
                                     notifyAllChatMembers(saved, chat, senderId, null)
@@ -88,6 +89,8 @@ public class MessageService {
                                             .type(NotificationType.MESSAGE)
                                             .chatName(chatName)
                                             .attachments(attachments)
+                                            .initialisationVector(message.getInitialisationVector())
+                                            .keyVersion(message.getKeyVersion())
                                             .messageId(message.getId())
                                             .build();
 
@@ -111,6 +114,8 @@ public class MessageService {
                     message.setChatId(chat.getId());
                     message.setSenderId(senderId);
                     message.setContent(messageTextRequest.getContent());
+                    message.setInitialisationVector(messageTextRequest.getInitialisationVector());
+                    message.setKeyVersion(message.getKeyVersion());
                     if (messageTextRequest.getContent() == null || messageTextRequest.getContent().trim().isEmpty()) {
                         message.setMessageType(MessageType.IMAGE);
                     } else {
@@ -142,7 +147,8 @@ public class MessageService {
                                                     savedAt.getId(),
                                                     savedAt.getType(),
                                                     savedAt.getUrl(),
-                                                    savedAt.getFilename()
+                                                    savedAt.getFilename(),
+                                                    savedAt.getMessageId()
                                             ))
                                             .collectList()
                                             // 4. Когда ВСЕ картинки сохранены, отправляем ОДНО уведомление со списком

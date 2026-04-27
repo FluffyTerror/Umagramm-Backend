@@ -12,6 +12,8 @@ public record ChatResponse (
          String type,
          Long unreadCount,
          String lastMessage,
+         String initialisationVector,
+         Long keyVersion,
          LocalDateTime lastMessageTime,
          boolean isRecipientOnline,
          Long avatarId

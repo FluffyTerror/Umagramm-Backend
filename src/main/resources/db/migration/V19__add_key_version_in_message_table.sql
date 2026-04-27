@@ -1,0 +1,4 @@
+ALTER TABLE messages
+ADD COLUMN key_version BIGINT NOT NULL DEFAULT 1;
+
+

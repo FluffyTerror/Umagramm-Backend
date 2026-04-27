@@ -29,6 +29,10 @@ public class Message extends BaseAuditingEntity {
     // Серверу все равно, картинка там или текст — это просто набор байт.
     private String content;
 
+    private String initialisationVector;
+
+    private Long keyVersion;
+
     @Column("message_type")
     private MessageType messageType;
 

@@ -1,20 +1,21 @@
 package com.FluffyTerror.Umagramm_Backend.controller.attachment;
 
 import com.FluffyTerror.Umagramm_Backend.models.user.User;
+import com.FluffyTerror.Umagramm_Backend.responses.attachment.AttachmentResponse;
 import com.FluffyTerror.Umagramm_Backend.service.attachment.AttachmentService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.http.*;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import org.springframework.core.io.Resource;
 import reactor.core.scheduler.Schedulers;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/attachments")
@@ -57,6 +58,10 @@ public class AttachmentController {
                                     .body(resource);
                         }).subscribeOn(Schedulers.boundedElastic())
                 );
+    }
+    @GetMapping("/chat/{chatId}")
+    public Mono<List<AttachmentResponse>> getAttachmentsByChat(@PathVariable("chatId") String chatId, @AuthenticationPrincipal User user){
+        return attachmentService.getAttachmentsByChat(chatId,user.getId());
     }
 
     private static String getContentDisposition(String filename, MediaType mediaType) {

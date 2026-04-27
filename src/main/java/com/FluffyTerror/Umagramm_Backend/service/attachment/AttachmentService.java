@@ -1,23 +1,24 @@
 package com.FluffyTerror.Umagramm_Backend.service.attachment;
 
 import com.FluffyTerror.Umagramm_Backend.enums.MessageType;
-import com.FluffyTerror.Umagramm_Backend.exceptions.FileNotFoundException;
+import com.FluffyTerror.Umagramm_Backend.mapper.MessageMapper;
 import com.FluffyTerror.Umagramm_Backend.models.attachment.Attachment;
 import com.FluffyTerror.Umagramm_Backend.repository.attachment.AttachmentRepository;
 
 
+import com.FluffyTerror.Umagramm_Backend.repository.chatMember.ChatMemberRepository;
 import com.FluffyTerror.Umagramm_Backend.requests.media.UploadInitRequest;
+import com.FluffyTerror.Umagramm_Backend.responses.attachment.AttachmentResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.attachment.ResourceData;
 import com.FluffyTerror.Umagramm_Backend.responses.media.UploadInitResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.Resource;
 import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.UrlResource; // Если решишь использовать URL вместо путей
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.codec.multipart.FilePart;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -28,7 +29,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.*;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -38,19 +39,22 @@ import java.util.UUID;
 public class AttachmentService {
 
     private final AttachmentRepository attachmentRepository;
+    private final ChatMemberRepository chatMemberRepository;
     private final ReactiveRedisTemplate<String, byte[]> redisTemplate;
     private final String fileUploadPath;
-
+    private final MessageMapper mapper;
     private static final long MAX_CACHE_SIZE = 5 * 1024 * 1024;
 
     public AttachmentService(
-            AttachmentRepository attachmentRepository,
+            AttachmentRepository attachmentRepository, ChatMemberRepository chatMemberRepository,
             ReactiveRedisTemplate<String, byte[]> redisTemplate,
-            @Value("${application.file.uploads.media-output-path}") String fileUploadPath
+            @Value("${application.file.uploads.media-output-path}") String fileUploadPath, MessageMapper mapper
     ) {
         this.attachmentRepository = attachmentRepository;
+        this.chatMemberRepository = chatMemberRepository;
         this.redisTemplate = redisTemplate;
         this.fileUploadPath = fileUploadPath;
+        this.mapper = mapper;
     }
     public Mono<Attachment> saveGroupAvatar(FilePart filePart, String senderId) {
         String filename = System.currentTimeMillis() + "_" + filePart.filename();
@@ -152,6 +156,17 @@ public class AttachmentService {
                     ));
                 });
     }
+
+    public Mono<List<AttachmentResponse>> getAttachmentsByChat(String chatId, String userId) {
+        chatMemberRepository.findByChatIdAndUserId(chatId, userId)
+                .switchIfEmpty(Mono.error(new AccessDeniedException("You are not a member of this chat")));
+        // Рекомендуется: добавить проверку, состоит ли userId в этом chatId перед запросом
+        return attachmentRepository.findAttachmentsByChat(chatId)
+                .map(mapper::toAttachmentResponse)
+                .collectList()
+                .defaultIfEmpty(List.of()); // Возвращаем пустой список, если вложений нет
+    }
+
     //--TODO переделать загрузку медиа
     public Mono<UploadInitResponse> initUploadSession(UploadInitRequest request, String userId) {
         String uploadId = UUID.randomUUID().toString();
