@@ -144,4 +144,23 @@ public class UserService {
                         friendUser.getCreatedDate()));
     }
 
+    public Mono<Void> updateFcmToken(String userId, String token) {
+        return userRepository.findById(userId)
+                .flatMap(user -> {
+                    user.setFcmToken(token);
+                    user.markNotNew(); // КРИТИЧЕСКИ ВАЖНО: устанавливает isNew = false
+                    return userRepository.save(user);
+                })
+                .then();
+    }
+
+    public Mono<Void> toggleNotificationsForUser(boolean enabled, String userId){
+        return userRepository.findById(userId)
+                .flatMap(u -> {
+                    u.markNotNew();
+                    u.setNotificationsEnabled(enabled);
+                    return userRepository.save(u);
+                })
+                .then();
+    }
 }

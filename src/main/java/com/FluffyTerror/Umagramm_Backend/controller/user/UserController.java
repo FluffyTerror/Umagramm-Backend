@@ -64,4 +64,8 @@ public class UserController {
 
         return userService.updateUserProfile(currentUser.getId(), request, file);
     }
+    @PutMapping("/notifications/toggle")
+    public Mono<Void> toggleNotifications(@RequestParam boolean enabled, @AuthenticationPrincipal User user) {
+        return userService.toggleNotificationsForUser(enabled,user.getId());
+    }
 }

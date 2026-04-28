@@ -27,6 +27,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 
 import java.net.URLConnection;
@@ -68,9 +69,20 @@ public class MessageService {
                     message.setKeyVersion(chat.getKeyVersion());
 
                     return messageRepository.save(message)
-                            .flatMap(saved -> notifyAllChatMembers(saved, chat, senderId, null)
-                                    .then(mapper.toResponse(saved))
-                            );
+                            .flatMap(saved -> {
+                                // КРИТИЧЕСКИЙ МОМЕНТ:
+                                // Мы вызываем notify, но НЕ возвращаем его в цепочку через flatMap.
+                                // Используем .subscribe(), чтобы запустить процесс отдельно.
+                                notifyAllChatMembers(saved, chat, senderId, null)
+                                        .subscribeOn(Schedulers.boundedElastic())
+                                        .subscribe(
+                                                null, // успех нам не важен здесь
+                                                err -> log.error("Push notification failed: ", err) // ловим ошибки здесь, чтобы не упал основной метод
+                                        );
+
+                                // Сразу возвращаем ответ пользователю
+                                return mapper.toResponse(saved);
+                            });
                 });
     }
 
@@ -81,7 +93,7 @@ public class MessageService {
         return chatService.getChatName(chat, senderId)
                 .flatMapMany(chatName ->
                         chatMemberRepository.findAllByChatId(chat.getId())
-                                //.filter(member -> !member.getUserId().equals(senderId)) // Не шлем самому себе
+                                .filter(member -> !member.getUserId().equals(senderId))//не шлем себе
                                 .flatMap(member -> {
                                     Notification notification = Notification.builder()
                                             .chatId(chat.getId())

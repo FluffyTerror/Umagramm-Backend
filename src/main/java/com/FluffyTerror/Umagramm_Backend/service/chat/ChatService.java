@@ -19,6 +19,7 @@ import com.FluffyTerror.Umagramm_Backend.responses.ChatMemberResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.attachment.AttachmentResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.chat.ChatResponse;
 import com.FluffyTerror.Umagramm_Backend.service.attachment.AttachmentService;
+import com.FluffyTerror.Umagramm_Backend.service.push.PushNotificationService;
 import com.FluffyTerror.Umagramm_Backend.websockets.WebSocketNotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +50,7 @@ public class ChatService {
     private final DatabaseClient databaseClient;
     private final AttachmentService attachmentService;
     private final WebSocketNotificationService webSocketNotificationService;
+    private final PushNotificationService pushNotificationService;
 
     /**
      * Создает новый ПРИВАТНЫЙ чат или возвращает существующий с полной информацией
@@ -309,15 +311,20 @@ public class ChatService {
         return messageRepository.save(systemMsg)
                 .flatMap(savedMsg -> {
                     return chatMemberRepository.findAllByChatId(chatId)
-                            .map(ChatMember::getUserId)
-                            .collectList()
-                            .flatMap(userIds -> {
-                                return webSocketNotificationService.broadcastToChat(userIds, Map.of(
-                                        "type", "NEW_MESSAGE",
-                                        "chatId", chatId,
-                                        "message", savedMsg
-                                ));
-                            });
+                            .flatMap(member -> {
+                                // Отправляем пуш всем, кроме инициатора
+                                if (!member.getUserId().equals(initiatorId)) {
+                                    return userRepository.findById(member.getUserId())
+                                            .doOnNext(user -> {
+                                                pushNotificationService.sendPushNotification(
+                                                        user.getFcmToken(),
+                                                        "Системное уведомление",
+                                                        text
+                                                );
+                                            });
+                                }
+                                return Mono.empty();
+                            }).collectList();
                 }).then();
     }
 }

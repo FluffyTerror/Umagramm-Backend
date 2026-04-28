@@ -1,6 +1,7 @@
 package com.FluffyTerror.Umagramm_Backend.repository.user;
 
 import com.FluffyTerror.Umagramm_Backend.models.user.User;
+import org.springframework.data.r2dbc.repository.Modifying;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import org.springframework.stereotype.Repository;
@@ -12,6 +13,10 @@ import java.util.List;
 
 @Repository
 public interface UserRepository extends ReactiveCrudRepository<User, String> {
+
+    @Modifying
+    @Query("UPDATE users SET fcm_token = :token WHERE id = :userId")
+    Mono<Void> updateFcmToken(String userId, String token);
 
     @Query("SELECT * FROM users WHERE username = :username")
     Mono<User> findByUsername(String username);

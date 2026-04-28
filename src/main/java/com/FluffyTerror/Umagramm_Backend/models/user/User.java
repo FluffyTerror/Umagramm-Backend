@@ -41,6 +41,8 @@ public class User extends BaseAuditingEntity implements Persistable<String> {
     private String username;
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime lastSeen;
+    private String fcmToken;
+    private boolean notificationsEnabled;
 
     private Long profilePhotoId;   // FK → attachment.id
 
