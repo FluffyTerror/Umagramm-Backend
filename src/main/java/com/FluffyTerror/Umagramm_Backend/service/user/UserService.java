@@ -1,5 +1,9 @@
 package com.FluffyTerror.Umagramm_Backend.service.user;
 
+import com.FluffyTerror.Umagramm_Backend.enums.MessageType;
+import com.FluffyTerror.Umagramm_Backend.models.attachment.Attachment;
+import com.FluffyTerror.Umagramm_Backend.repository.attachment.AttachmentRepository;
+import com.FluffyTerror.Umagramm_Backend.requests.UpdateUserRequest;
 import com.FluffyTerror.Umagramm_Backend.requests.UsersRequest;
 import com.FluffyTerror.Umagramm_Backend.enums.FriendStatus;
 import com.FluffyTerror.Umagramm_Backend.models.user.User;
@@ -8,8 +12,10 @@ import com.FluffyTerror.Umagramm_Backend.repository.user.UserRepository;
 import com.FluffyTerror.Umagramm_Backend.mapper.UserMapper;
 import com.FluffyTerror.Umagramm_Backend.responses.friend.FriendResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.user.UserResponse;
+import com.FluffyTerror.Umagramm_Backend.service.attachment.AttachmentService;
 import com.FluffyTerror.Umagramm_Backend.websockets.WebSocketSessionRegistry;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Service;
@@ -26,6 +32,8 @@ public class UserService {
     private final UserRepository userRepository;
     private final FriendsRepository friendsRepository;
     private final WebSocketSessionRegistry webSocketSessionRegistry;
+    private final AttachmentService attachmentService;
+    private final AttachmentRepository attachmentRepository;
     private final UserMapper userMapper;
 
     public Mono<UserResponse> getInfoAboutCurrentUser(@AuthenticationPrincipal User user) {
@@ -84,6 +92,42 @@ public class UserService {
                     return Mono.empty();
                 })
                 .then();
+    }
+    public Mono<UserResponse> updateUserProfile(String userId, UpdateUserRequest request, FilePart file) {
+        return userRepository.findById(userId)
+                .switchIfEmpty(Mono.error(new Exception("User not found")))
+                .flatMap(user -> {
+                    user.markNotNew();
+
+                    // 1. Применяем текстовые изменения (если они есть)
+                    if (request != null) {
+                        if (request.firstName() != null) user.setFirstName(request.firstName());
+                        if (request.lastName() != null) user.setLastName(request.lastName());
+                        if (request.username() != null) user.setUsername(request.username());
+                    }
+
+                    // 2. Если файла нет, просто переходим к сохранению
+                    if (file == null) {
+                        return Mono.just(user);
+                    }
+
+                    // 3. Если файл есть, сохраняем его и привязываем ID к юзеру
+                    return attachmentService.saveFile(file, userId)
+                            .flatMap(filePath -> {
+                                Attachment attachment = new Attachment();
+                                attachment.setType(MessageType.IMAGE);
+                                attachment.setUrl(filePath);
+                                attachment.setFilename(file.filename());
+                                // Можешь добавить вытягивание contentType, если нужно
+                                return attachmentRepository.save(attachment);
+                            })
+                            .map(savedAttachment -> {
+                                user.setProfilePhotoId(savedAttachment.getId());
+                                return user;
+                            });
+                })
+                .flatMap(userRepository::save)
+                .map(userMapper::toUserResponse); // Возвращаем обновленного юзера
     }
 
 

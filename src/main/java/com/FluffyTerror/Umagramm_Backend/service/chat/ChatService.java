@@ -208,22 +208,33 @@ public class ChatService {
         return chatRepository.findById(request.chatId())
                 .filter(chat -> chat.getChatType() == ChatType.GROUP)
                 .switchIfEmpty(Mono.error(() -> new IllegalArgumentException("Only for group chats")))
-                .flatMap(chat -> chatMemberRepository.findByChatIdAndUserId(chat.getId(), initiatorId))
-                .switchIfEmpty(Mono.error(() -> new IllegalArgumentException("You are not in this chat")))
-                .flatMap(initiatorMember -> chatMemberRepository.findByChatIdAndUserId(request.chatId(), request.userId())
-                        .flatMap(existing -> Mono.<ChatMember>error(new IllegalArgumentException("Already in chat")))
-                        .switchIfEmpty(Mono.defer(() -> {
-                            ChatMember chatMember = createMember(request.chatId(), request.userId(), initiatorId, MemberRole.MEMBER);
+                // Открываем блок { }, чтобы сохранить переменную 'chat' в области видимости
+                .flatMap(chat -> {
 
-                            return chatMemberRepository.save(chatMember)
-                                    .flatMap(savedMember -> userRepository.findById(request.userId())
-                                            .flatMap(user -> {
-                                                String name = (user.getFirstName() + " " + user.getLastName()).trim();
-                                                return saveSystemMessage(request.chatId(), name + " joined the chat",initiatorId);
-                                            })
-                                            .thenReturn(savedMember)); // Возвращаем участника для API
-                        }))
-                );
+                    return chatMemberRepository.findByChatIdAndUserId(chat.getId(), initiatorId)
+                            .switchIfEmpty(Mono.error(() -> new IllegalArgumentException("You are not in this chat")))
+                            .flatMap(initiatorMember -> chatMemberRepository.findByChatIdAndUserId(request.chatId(), request.userId())
+                                    .flatMap(existing -> Mono.<ChatMember>error(new IllegalArgumentException("Already in chat")))
+                                    .switchIfEmpty(Mono.defer(() -> {
+
+                                        // 1. Теперь 'chat' доступен, так как мы всё ещё внутри верхнего flatMap
+                                        chat.setKeyVersion(chat.getKeyVersion() + 1);
+
+                                        ChatMember chatMember = createMember(request.chatId(), request.userId(), initiatorId, MemberRole.MEMBER);
+
+                                        // 2. Сохраняем обновленный чат и нового участника
+                                        return chatRepository.save(chat)
+                                                .then(chatMemberRepository.save(chatMember))
+                                                .flatMap(savedMember -> userRepository.findById(request.userId())
+                                                        .flatMap(user -> {
+                                                            String name = (user.getFirstName() + " " + user.getLastName()).trim();
+                                                            // Передаем текущую версию ключа в системное сообщение
+                                                            return saveSystemMessage(request.chatId(), name + " joined the chat", initiatorId, chat.getKeyVersion());
+                                                        })
+                                                        .thenReturn(savedMember));
+                                    }))
+                            );
+                }); // Закрываем блок flatMap(chat -> { ... })
     }
 
     @Transactional
@@ -251,9 +262,10 @@ public class ChatService {
                         chat.setKeyVersion(chat.getKeyVersion() + 1);
 
                         // 2. Сохраняем чат с новой версией, удаляем юзера и шлем системное сообщение
-                        return chatRepository.save(chat) // Обновляем версию в БД
+                        return chatRepository.save(chat)
                                 .then(chatMemberRepository.delete(target))
-                                .then(saveSystemMessage(request.chatId(), actionText, initiatorId));
+                                // Передаем chat.getKeyVersion()
+                                .then(saveSystemMessage(request.chatId(), actionText, initiatorId, chat.getKeyVersion()));
                     } else {
                         return Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN));
                     }
@@ -281,7 +293,8 @@ public class ChatService {
                         ))
                 ).collectList();
     }
-    private Mono<Void> saveSystemMessage(String chatId, String text,String initiatorId) {
+    // Добавь параметр Long keyVersion
+    private Mono<Void> saveSystemMessage(String chatId, String text, String initiatorId, Long keyVersion) {
         Message systemMsg = new Message();
         systemMsg.setChatId(chatId);
         systemMsg.setContent(text);
@@ -290,15 +303,15 @@ public class ChatService {
         systemMsg.setCreatedDate(LocalDateTime.now());
         systemMsg.setMessageState(MessageState.SENT);
 
+        // Устанавливаем версию ключа для синхронизации фронтенда
+        systemMsg.setKeyVersion(keyVersion);
+
         return messageRepository.save(systemMsg)
                 .flatMap(savedMsg -> {
-                    // 1. Находим всех участников чата
                     return chatMemberRepository.findAllByChatId(chatId)
                             .map(ChatMember::getUserId)
                             .collectList()
                             .flatMap(userIds -> {
-                                // 2. Рассылаем через твой WebSocket-сервис
-                                // Убедись, что на фронте этот JSON поймут
                                 return webSocketNotificationService.broadcastToChat(userIds, Map.of(
                                         "type", "NEW_MESSAGE",
                                         "chatId", chatId,
