@@ -12,11 +12,10 @@ import com.FluffyTerror.Umagramm_Backend.repository.chatMember.ChatMemberReposit
 import com.FluffyTerror.Umagramm_Backend.repository.friends.FriendsRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.message.MessageRepository;
 import com.FluffyTerror.Umagramm_Backend.repository.user.UserRepository;
-import com.FluffyTerror.Umagramm_Backend.requests.AddChatMemberRequest;
-import com.FluffyTerror.Umagramm_Backend.requests.CreateGroupChatRequest;
-import com.FluffyTerror.Umagramm_Backend.requests.KickChatMemberRequest;
+import com.FluffyTerror.Umagramm_Backend.requests.groupChat.AddChatMemberRequest;
+import com.FluffyTerror.Umagramm_Backend.requests.groupChat.CreateGroupChatRequest;
+import com.FluffyTerror.Umagramm_Backend.requests.groupChat.KickChatMemberRequest;
 import com.FluffyTerror.Umagramm_Backend.responses.ChatMemberResponse;
-import com.FluffyTerror.Umagramm_Backend.responses.attachment.AttachmentResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.chat.ChatResponse;
 import com.FluffyTerror.Umagramm_Backend.service.attachment.AttachmentService;
 import com.FluffyTerror.Umagramm_Backend.service.push.PushNotificationService;
@@ -231,7 +230,14 @@ public class ChatService {
                                                         .flatMap(user -> {
                                                             String name = (user.getFirstName() + " " + user.getLastName()).trim();
                                                             // Передаем текущую версию ключа в системное сообщение
-                                                            return saveSystemMessage(request.chatId(), name + " joined the chat", initiatorId, chat.getKeyVersion());
+                                                            return saveSystemMessage(
+                                                                    request.chatId(),
+                                                                    name + " joined the chat",
+                                                                    initiatorId,
+                                                                    request.userId(),
+                                                                    "CHAT_MEMBER_ADDED",
+                                                                    chat.getKeyVersion()
+                                                            );
                                                         })
                                                         .thenReturn(savedMember));
                                     }))
@@ -259,15 +265,22 @@ public class ChatService {
                     if (isAdmin || isSelfKick || isInviter) {
                         String name = (targetUser.getFirstName() + " " + targetUser.getLastName()).trim();
                         String actionText = isSelfKick ? name + " left the chat" : name + " was removed from the chat";
-
+                        String actionType = isSelfKick ? "CHAT_MEMBER_LEFT" : "CHAT_MEMBER_REMOVED";
                         // 1. Инкрементируем версию ключа чата
                         chat.setKeyVersion(chat.getKeyVersion() + 1);
 
                         // 2. Сохраняем чат с новой версией, удаляем юзера и шлем системное сообщение
                         return chatRepository.save(chat)
                                 .then(chatMemberRepository.delete(target))
-                                // Передаем chat.getKeyVersion()
-                                .then(saveSystemMessage(request.chatId(), actionText, initiatorId, chat.getKeyVersion()));
+                                // ДОБАВЛЕНЫ: request.userId() и actionType
+                                .then(saveSystemMessage(
+                                        request.chatId(),
+                                        actionText,
+                                        initiatorId,
+                                        request.userId(),
+                                        actionType,
+                                        chat.getKeyVersion()
+                                ));
                     } else {
                         return Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN));
                     }
@@ -296,7 +309,7 @@ public class ChatService {
                 ).collectList();
     }
     // Добавь параметр Long keyVersion
-    private Mono<Void> saveSystemMessage(String chatId, String text, String initiatorId, Long keyVersion) {
+    private Mono<Void> saveSystemMessage(String chatId, String text, String initiatorId, String targetId, String actionType, Long keyVersion) {
         Message systemMsg = new Message();
         systemMsg.setChatId(chatId);
         systemMsg.setContent(text);
@@ -304,27 +317,50 @@ public class ChatService {
         systemMsg.setSenderId(initiatorId);
         systemMsg.setCreatedDate(LocalDateTime.now());
         systemMsg.setMessageState(MessageState.SENT);
-
-        // Устанавливаем версию ключа для синхронизации фронтенда
         systemMsg.setKeyVersion(keyVersion);
 
         return messageRepository.save(systemMsg)
                 .flatMap(savedMsg -> {
-                    return chatMemberRepository.findAllByChatId(chatId)
+                    // 1. Формируем единый payload для вебсокета
+                    Map<String, Object> wsPayload = Map.of(
+                            "type", actionType,
+                            "chatId", chatId,
+                            "targetId", targetId,
+                            "actorId", initiatorId,
+                            "message", savedMsg // Фронт сможет сразу отрисовать это сообщение
+                    );
+
+                    // 2. Рассылаем текущим участникам чата
+                    Mono<Void> notifyMembers = chatMemberRepository.findAllByChatId(chatId)
                             .flatMap(member -> {
-                                // Отправляем пуш всем, кроме инициатора
+                                // Рассылка по WS всем участникам (включая инициатора)
+                                // ВНИМАНИЕ: Замени "sendToUser" на реальный метод из твоего WebSocketNotificationService
+                                Mono<Void> wsTask = webSocketNotificationService.sendToUser(member.getUserId(), wsPayload)
+                                        .onErrorResume(e -> Mono.empty());
+
+                                // Push-уведомление (всем, КРОМЕ инициатора)
+                                Mono<Void> pushTask = Mono.empty();
                                 if (!member.getUserId().equals(initiatorId)) {
-                                    return userRepository.findById(member.getUserId())
-                                            .doOnNext(user -> {
-                                                pushNotificationService.sendPushNotification(
-                                                        user.getFcmToken(),
-                                                        "Системное уведомление",
-                                                        text
-                                                );
-                                            });
+                                    pushTask = userRepository.findById(member.getUserId())
+                                            .doOnNext(user -> pushNotificationService.sendPushNotification(
+                                                    user.getFcmToken(),
+                                                    "Системное уведомление",
+                                                    text
+                                            )).then();
                                 }
-                                return Mono.empty();
-                            }).collectList();
-                }).then();
+
+                                return Mono.when(wsTask, pushTask);
+                            }).then();
+
+                    // 3. Если пользователя кикнули, его уже нет в chatMemberRepository,
+                    // но ему тоже нужно отправить WS-событие, чтобы он закрыл чат у себя
+                    Mono<Void> notifyTargetIfKicked = Mono.empty();
+                    if (actionType.equals("CHAT_MEMBER_REMOVED")) {
+                        notifyTargetIfKicked = webSocketNotificationService.sendToUser(targetId, wsPayload)
+                                .onErrorResume(e -> Mono.empty());
+                    }
+
+                    return Mono.when(notifyMembers, notifyTargetIfKicked);
+                });
     }
 }

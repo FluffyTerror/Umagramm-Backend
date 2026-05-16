@@ -41,11 +41,11 @@ public class FileInitialiser implements CommandLineRunner {
                 ClassPathResource resource = new ClassPathResource("static/images/default-avatar.jpg");
                 try (InputStream is = resource.getInputStream()) {
                     Files.copy(is, targetPath, StandardCopyOption.REPLACE_EXISTING);
-                    log.info("✅ Дефолтная аватарка скопирована в: {}", targetPath);
+                    log.info("Дефолтная аватарка скопирована в: {}", targetPath);
                 }
             }
         } catch (IOException e) {
-            log.error("❌ Ошибка при копировании файла: {}", e.getMessage());
+            log.error("Ошибка при копировании файла: {}", e.getMessage());
         }
     }
 

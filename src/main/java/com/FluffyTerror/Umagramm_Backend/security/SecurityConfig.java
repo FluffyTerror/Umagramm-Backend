@@ -82,7 +82,18 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        //return new Argon2PasswordEncoder() --TODO возможно в будущем вернусь к идее шифрования через ARGON2, вместо BCrypt
-        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+        int saltLength = 16;      // Длина соли в байтах (стандарт)
+        int hashLength = 32;      // Длина хэша в байтах (стандарт)
+        int parallelism = 1;      // Количество потоков процессора
+        int memory = 65536;       // Объем памяти в килобайтах (64 МБ)
+        int iterations = 3;       // Количество итераций
+
+        return new Argon2PasswordEncoder(
+                saltLength,
+                hashLength,
+                parallelism,
+                memory,
+                iterations
+        );
     }
 }

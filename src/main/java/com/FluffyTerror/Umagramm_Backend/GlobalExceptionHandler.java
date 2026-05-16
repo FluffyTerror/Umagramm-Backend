@@ -57,9 +57,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(TokenForQRCodeExpiredException.class)
     private ResponseEntity<ErrorResponse> formatTokenForQRCodeExpired(TokenForQRCodeExpiredException ex) {
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+        return ResponseEntity.status(HttpStatus.GONE)
                 .body(new ErrorResponse(
-                        HttpStatus.UNAUTHORIZED.value(),
+                        HttpStatus.GONE.value(),
                         ex.getMessage())
                 );
     }

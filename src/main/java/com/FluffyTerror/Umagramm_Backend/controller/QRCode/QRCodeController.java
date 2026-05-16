@@ -31,13 +31,15 @@ public class QRCodeController {
     }
 
     @PostMapping("/scan")
-    public Mono<ResponseEntity<String>> onScanToken(@AuthenticationPrincipal User initiator,
-                                                    @RequestBody QrRequest qrRequest) {
-        return qrService.consumeToken(qrRequest.token()).flatMap(
-                receiver ->{
-                    return friendsService.createFriendsRequest(initiator.getId(),receiver);
-                }
-        ).thenReturn(ResponseEntity.ok("Friend Request has been sent"));
+    public Mono<Map<String, String>> onScanToken(@AuthenticationPrincipal User initiator,
+                                                 @RequestBody QrRequest qrRequest) {
+        return qrService.consumeToken(qrRequest.token())
+                .flatMap(receiverId ->
+                        // Создаем заявку в друзья
+                        friendsService.createFriendsRequest(initiator.getId(), receiverId)
+                                // Вместо голой строки возвращаем JSON-объект {"userId": "..."}
+                                .thenReturn(Map.of("userId", receiverId))
+                );
     }
 
 }

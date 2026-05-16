@@ -1,4 +1,4 @@
-package com.FluffyTerror.Umagramm_Backend.requests;
+package com.FluffyTerror.Umagramm_Backend.requests.groupChat;
 
 public record KickChatMemberRequest(
         String userId,

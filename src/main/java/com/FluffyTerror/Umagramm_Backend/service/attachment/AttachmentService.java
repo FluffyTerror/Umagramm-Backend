@@ -160,7 +160,7 @@ public class AttachmentService {
     public Mono<List<AttachmentResponse>> getAttachmentsByChat(String chatId, String userId) {
         chatMemberRepository.findByChatIdAndUserId(chatId, userId)
                 .switchIfEmpty(Mono.error(new AccessDeniedException("You are not a member of this chat")));
-        // Рекомендуется: добавить проверку, состоит ли userId в этом chatId перед запросом
+        
         return attachmentRepository.findAttachmentsByChat(chatId)
                 .map(mapper::toAttachmentResponse)
                 .collectList()

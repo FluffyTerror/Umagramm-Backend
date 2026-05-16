@@ -1,6 +1,4 @@
-package com.FluffyTerror.Umagramm_Backend.requests;
-
-import com.FluffyTerror.Umagramm_Backend.models.user.User;
+package com.FluffyTerror.Umagramm_Backend.requests.groupChat;
 
 import java.util.List;
 

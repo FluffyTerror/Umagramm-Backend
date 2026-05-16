@@ -1,4 +1,4 @@
-package com.FluffyTerror.Umagramm_Backend.requests;
+package com.FluffyTerror.Umagramm_Backend.requests.groupChat;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

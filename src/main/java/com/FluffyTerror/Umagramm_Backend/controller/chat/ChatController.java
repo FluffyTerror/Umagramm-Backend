@@ -2,9 +2,9 @@ package com.FluffyTerror.Umagramm_Backend.controller.chat;
 
 import com.FluffyTerror.Umagramm_Backend.models.chatMember.ChatMember;
 import com.FluffyTerror.Umagramm_Backend.models.user.User;
-import com.FluffyTerror.Umagramm_Backend.requests.AddChatMemberRequest;
-import com.FluffyTerror.Umagramm_Backend.requests.CreateGroupChatRequest;
-import com.FluffyTerror.Umagramm_Backend.requests.KickChatMemberRequest;
+import com.FluffyTerror.Umagramm_Backend.requests.groupChat.AddChatMemberRequest;
+import com.FluffyTerror.Umagramm_Backend.requests.groupChat.CreateGroupChatRequest;
+import com.FluffyTerror.Umagramm_Backend.requests.groupChat.KickChatMemberRequest;
 import com.FluffyTerror.Umagramm_Backend.responses.ChatMemberResponse;
 import com.FluffyTerror.Umagramm_Backend.responses.chat.ChatResponse;
 import com.FluffyTerror.Umagramm_Backend.service.chat.ChatService;
@@ -16,7 +16,6 @@ import org.springframework.http.codec.multipart.FilePart;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;

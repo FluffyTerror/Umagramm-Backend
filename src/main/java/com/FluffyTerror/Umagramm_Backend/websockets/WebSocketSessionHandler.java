@@ -1,6 +1,6 @@
 package com.FluffyTerror.Umagramm_Backend.websockets;
 
-import com.FluffyTerror.Umagramm_Backend.requests.UsersRequest;
+import com.FluffyTerror.Umagramm_Backend.requests.groupChat.UsersRequest;
 import com.FluffyTerror.Umagramm_Backend.service.friends.FriendsService;
 import com.FluffyTerror.Umagramm_Backend.service.jwt.JwtService;
 import com.FluffyTerror.Umagramm_Backend.service.message.MessageService;
@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.socket.CloseStatus;
 import org.springframework.web.reactive.socket.WebSocketHandler;
@@ -31,283 +32,207 @@ public class WebSocketSessionHandler implements WebSocketHandler {
     private final UserService userService;
     private final ObjectMapper objectMapper;
 
-
-    public String getToken(String query) {
-        if (query != null && query.contains("token=")) {
-            return query.split("token=")[1].split("&")[0];
-        }
-        return null;
-    }
-
     @Override
     public Mono<Void> handle(WebSocketSession session) {
-        List<String> headers = session.getHandshakeInfo().getHeaders().get("Authorization");
+        return extractToken(session)
+                .flatMap(token -> {
+                    String userId = jwtService.extractUserId(token).toString();
+                    webSocketSessionRegistry.register(userId, session);
 
-        if (headers == null || headers.isEmpty()) {
-            return session.close(CloseStatus.BAD_DATA);
+                    // Установка статуса -> Входной поток -> Выход
+                    return userService.updateUserOnlineStatus(userId)
+                            .then(userService.broadcastStatus(userId, true))
+                            .thenMany(session.receive())
+                            .flatMap(message -> handleClientAction(message.getPayloadAsText(), userId, session))
+                            .doFinally(signal -> handleDisconnect(userId))
+                            .then();
+                })
+                .onErrorResume(e -> {
+                    log.error("WS Session Error: {}", e.getMessage());
+                    return session.close(CloseStatus.BAD_DATA);
+                });
+    }
+
+    private Mono<String> extractToken(WebSocketSession session) {
+        List<String> headers = session.getHandshakeInfo().getHeaders().get(HttpHeaders.AUTHORIZATION);
+        if (headers == null || headers.isEmpty() || !headers.getFirst().startsWith("Bearer ")) {
+            return Mono.error(new RuntimeException("Missing or invalid Authorization header"));
         }
-        String authHeader = headers.getFirst(); // Берем первый элемент списка
-        String token = authHeader.replace("Bearer ", "");
-        try {
-            String userId = jwtService.extractUserId(token).toString();
-            webSocketSessionRegistry.register(userId, session);
+        return Mono.just(headers.getFirst().substring(7));
+    }
 
-            userService.updateUserOnlineStatus(userId)
-                    .then(userService.broadcastStatus(userId, true))
-                    .subscribe();
-
-            // Поток ВХОДЯЩИХ сообщений от клиента (SEEN)
-            Mono<Void> input = session.receive()
-                    .flatMap(message -> {
-                        String payload = message.getPayloadAsText();
-                        return handleClientAction(payload, userId, session);
-                    })
-                    .then();
-
-            // Поток уведомлений пользователю
-            return input.doFinally(signal -> {
-                webSocketSessionRegistry.unregister(userId);
-                // OFFLINE
-                userService.updateUserOnlineStatus(userId)
-                        .then(userService.broadcastStatus(userId, false))
-                        .subscribe();
-            });
-
-        } catch (Exception e) {
-            return session.close(CloseStatus.NORMAL);
-        }
+    private void handleDisconnect(String userId) {
+        webSocketSessionRegistry.unregister(userId);
+        userService.updateUserOnlineStatus(userId)
+                .then(userService.broadcastStatus(userId, false))
+                .subscribe();
     }
 
     private Mono<Void> handleClientAction(String payload, String userId, WebSocketSession session) {
         try {
             JsonNode json = objectMapper.readTree(payload);
-            String type = json.has("type") ? json.get("type").asText() : "";
+            String type = json.has("type") ? json.get("type").asText() : "UNKNOWN";
 
-            switch (type) {
-
-                case "SEEN": {
-                    String chatId = json.get("chatId").asText();
-                    Long lastId = json.get("lastMessageId").asLong();
-                    return messageService.setMessagesToSeen(chatId, lastId, userId);
+            return switch (type) {
+                case "SEEN" -> handleSeenAction(json, userId);
+                case "FRIEND_REQUEST" -> handleFriendRequest(json, userId, session);
+                case "STATUS" -> handleStatusRequest(json, userId, session);
+                case "KEY_EXCHANGE_REQUEST", "KEY_EXCHANGE_RESPONSE" -> handleKeyExchange(json, userId, type);
+                case "ACCEPT_FRIEND_REQUEST" -> handleAcceptFriend(json, userId);
+                case "GROUP_KEY_DISTRIBUTION" -> handleGroupKeyDistribution(json, userId);
+                case "IS_KEY_REQUIRED" -> handleKeyRequired(json, userId);
+                case "KEY_NEEDED_REPLY" -> handleKeyNeededReply(json, userId);
+                case "CHAT_MEMBER_ADDED", "CHAT_MEMBER_REMOVED" -> handleChatMemberUpdate(json, userId, type);
+                case "OLD_KEYS_FOR_OLD_HAGS"->handleOldHagsKeyDistribution(json,userId);
+                default -> {
+                    log.warn("Unknown WS type: {} from user: {}", type, userId);
+                    yield Mono.empty();
                 }
-
-                case "FRIEND_REQUEST": {
-                    String receiverId = json.get("receiverId").asText();
-
-                    return friendsService.createFriendsRequest(userId, receiverId)
-                            .flatMap(request -> {
-                                // 1. Уведомляем получателя (если он в сети)
-                                WebSocketSession receiverSession = webSocketSessionRegistry.get(receiverId);
-                                Mono<Void> notifyReceiver = Mono.empty();
-
-                                if (receiverSession != null && receiverSession.isOpen()) {
-                                    String notification = "{\"type\":\"FRIEND_REQUEST\"}";
-                                    notifyReceiver = receiverSession.send(
-                                            Mono.just(receiverSession.textMessage(notification))
-                                    );
-                                }
-
-                                // 2. СРАЗУ запрашиваем статус получателя для отправителя
-                                UsersRequest statusRequest = new UsersRequest(List.of(receiverId));
-                                Mono<Void> sendStatusToSender = userService.getInfoAboutUsers(userId, statusRequest)
-                                        .flatMap(userResponses -> {
-                                            Map<String, Object> response = Map.of(
-                                                    "type", "STATUS_LIST",
-                                                    "users", userResponses
-                                            );
-                                            return sendJson(session, response); // Отправляем СЕБЕ (отправителю)
-                                        });
-
-                                // Выполняем оба действия параллельно
-                                return Mono.when(notifyReceiver, sendStatusToSender);
-                            });
-                }
-
-                case "STATUS": {
-                    List<String> ids = new ArrayList<>();
-
-                    if (json.has("ids") && json.get("ids").isArray()) {
-                        json.get("ids").forEach(node -> ids.add(node.asText()));
-                    }
-
-                    if (ids.isEmpty()) {
-                        return session.send(Mono.just(
-                                session.textMessage("{\"type\":\"STATUS_LIST\",\"users\":[]}")
-                        ));
-                    }
-
-                    UsersRequest usersRequest = new UsersRequest(ids);
-
-                    return userService.getInfoAboutUsers(userId, usersRequest)
-                            .flatMap(userResponses -> {
-                                try {
-                                    String responseJson = objectMapper.writeValueAsString(Map.of(
-                                            "type", "STATUS_LIST",
-                                            "users", userResponses
-                                    ));
-                                    return session.send(
-                                            Mono.just(session.textMessage(responseJson))
-                                    );
-                                } catch (JsonProcessingException e) {
-                                    return Mono.error(e);
-                                }
-                            })
-                            .onErrorResume(e -> {
-                                log.error("STATUS error", e);
-                                return session.send(Mono.just(
-                                        session.textMessage("{\"type\":\"ERROR\",\"message\":\"STATUS failed\"}")
-                                ));
-                            });
-                }
-                case "KEY_EXCHANGE_REQUEST","KEY_EXCHANGE_RESPONSE":
-                {
-                    String targetId = json.get("targetId").asText();
-                    String myPublicKey = json.get("publicKey").asText();
-                    String currentType = json.get("type").asText();
-
-                    WebSocketSession targetSession = webSocketSessionRegistry.get(targetId);
-
-                    if (targetSession != null && targetSession.isOpen()) {
-                        Map<String, String> response = Map.of(
-                                "type", currentType,
-                                "fromId", userId,
-                                "publicKey", myPublicKey
-                        );
-                        return sendJson(targetSession, response);
-                    }
-                    return Mono.empty();
-                }
-                case "ACCEPT_FRIEND_REQUEST": {
-                    String requesterId = json.get("requesterId").asText();
-                    String myPublicKey = json.get("publicKey").asText();
-                    log.info("incoming ACCEPT: userId={}, requesterId={}", userId, requesterId);
-
-                    return friendsService.acceptFriendRequest(userId, requesterId)
-                            .flatMap(friendship -> {
-                                log.info("DB updated. looking for session for requesterId={}", requesterId);
-                                WebSocketSession requesterSession = webSocketSessionRegistry.get(requesterId);
-
-                                if (requesterSession != null && requesterSession.isOpen()) {
-                                    log.info("session found. sending FRIEND_ACCEPTED_HANDSHAKE...");
-                                    Map<String, String> response = Map.of(
-                                            "type", "FRIEND_ACCEPTED_HANDSHAKE",
-                                            "fromId", userId,
-                                            "publicKey", myPublicKey
-                                    );
-                                    return sendJson(requesterSession, response);
-                                } else {
-                                    log.warn("Session not found. requesterId={} currently OFFLINE.", requesterId);
-                                    return Mono.empty();
-                                }
-                            })
-                            // Если сервис ничего не вернул (Mono.empty)
-                            .switchIfEmpty(Mono.defer(() -> {
-                                log.warn("friendsService returned void! request not found or already accepted");
-                                return Mono.empty();
-                            }))
-                            // Перехват ошибок базы данных или бизнес-логики
-                            .onErrorResume(e -> {
-                                log.error("Error inside friendsService: ", e);
-                                return Mono.empty();
-                            });
-                }
-                case "GROUP_KEY_DISTRIBUTION": {
-                    String chatId = json.get("chatId").asText();
-                    String encryptedKey = json.get("encryptedKey").asText();
-                    log.info("Incoming GROUP_KEY_DISTRIBUTION msg {}",json);
-                    // Проверяем наличие версии ключа (полезно для re-keying при кике)
-                    long keyVersion = json.has("keyVersion") ? json.get("keyVersion").asLong() : 1L;
-
-                    // 1. Получаем список ID друзей в этом чате
-                    return friendsService.getFriendsByChatId(chatId, userId)
-                            // Если запрос возвращает Flux<String>, map не нужен. Если Flux<Friend>, то:
-                            // .map(Friend::getFriendId)
-                            .collectList()
-                            .flatMap(allowedFriendIds -> {
-                                List<Mono<Void>> sendTasks = new ArrayList<>();
-
-                                // 2. Рассылаем один и тот же зашифрованный блок всем друзьям онлайн
-                                for (String targetId : allowedFriendIds) {
-                                    WebSocketSession targetSession = webSocketSessionRegistry.get(targetId);
-
-                                    if (targetSession != null && targetSession.isOpen()) {
-                                        Map<String, Object> response = Map.of(
-                                                "type", "GROUP_KEY_RECEIVED",
-                                                "chatId", chatId,
-                                                "fromId", userId,
-                                                "encryptedKey", encryptedKey,
-                                                "keyVersion", keyVersion
-                                        );
-                                        sendTasks.add(sendJson(targetSession, response));
-                                    }
-                                }
-
-                                // 3. Выполняем рассылку параллельно
-                                return Mono.when(sendTasks);
-                            });
-                }
-                case "IS_KEY_REQUIRED": {
-                    String chatId = json.get("chatId").asText();
-                    log.info("Incoming IS_KEY_REQUIRED msg {}",json);
-                    // userId здесь — это ID того, КТО спрашивает (отправитель сообщения)
-
-                    // 1. Находим всех друзей в этом чате
-                    return friendsService.getFriendsByChatId(chatId, userId)
-                            .collectList()
-                            .flatMap(allowedFriendIds -> {
-                                List<Mono<Void>> sendTasks = new ArrayList<>();
-
-                                for (String targetId : allowedFriendIds) {
-                                    WebSocketSession targetSession = webSocketSessionRegistry.get(targetId);
-
-                                    // 2. Проверяем, в сети ли друг
-                                    if (targetSession != null && targetSession.isOpen()) {
-                                        Map<String, Object> response = Map.of(
-                                                "type", "IS_KEY_REQUIRED",
-                                                "chatId", chatId,
-                                                "senderId", userId // Пересылаем ID того, кто готов дать ключ
-                                        );
-                                        sendTasks.add(sendJson(targetSession, response));
-                                    }
-                                }
-                                // 3. Рассылаем уведомление всем друзьям в чате
-                                return Mono.when(sendTasks);
-                            });
-                }case "KEY_NEEDED_REPLY": {
-                    String chatId = json.get("chatId").asText();
-                    String targetId = json.get("targetId").asText(); // ID того, кто прислал IS_KEY_REQUIRED (Админ)
-                    log.info("Incoming KEY_NEEDED_REPLY msg {}",json);
-                    WebSocketSession targetSession = webSocketSessionRegistry.get(targetId);
-
-                    if (targetSession != null && targetSession.isOpen()) {
-                        Map<String, Object> response = Map.of(
-                                "type", "KEY_NEEDED_REPLY",
-                                "chatId", chatId,
-                                "fromId", userId // ID того, кому нужен ключ (Кент)
-                        );
-                        return sendJson(targetSession, response);
-                    }
-                    return Mono.empty();
-                }
-
-
-                default:
-                    log.warn("Unknown WS type: {}", type);
-                    return Mono.empty();
-            }
-
+            };
         } catch (Exception e) {
-            log.error("WS parse error", e);
+            log.error("Error parsing WS payload", e);
             return Mono.empty();
         }
     }
-    private Mono<Void> sendJson(WebSocketSession session, Object data) {
-        try {
-            String json = objectMapper.writeValueAsString(data);
-            return session.send(Mono.just(session.textMessage(json)));
-        } catch (JsonProcessingException e) {
-            log.error("JSON serializing error", e);
-            return Mono.error(e);
+
+
+    private Mono<Void> handleSeenAction(JsonNode json, String userId) {
+        String chatId = json.get("chatId").asText();
+        Long lastId = json.get("lastMessageId").asLong();
+        return messageService.setMessagesToSeen(chatId, lastId, userId);
+    }
+
+    private Mono<Void> handleFriendRequest(JsonNode json, String userId, WebSocketSession session) {
+        String receiverId = json.get("receiverId").asText();
+        return friendsService.createFriendsRequest(userId, receiverId)
+                .flatMap(request -> {
+                    Mono<Void> notify = sendToUser(receiverId, Map.of("type", "FRIEND_REQUEST"));
+                    Mono<Void> sendStatus = userService.getInfoAboutUsers(userId, new UsersRequest(List.of(receiverId)))
+                            .flatMap(res -> sendJson(session, Map.of("type", "STATUS_LIST", "users", res)));
+                    return Mono.when(notify, sendStatus);
+                });
+    }
+
+    private Mono<Void> handleStatusRequest(JsonNode json, String userId, WebSocketSession session) {
+        List<String> ids = new ArrayList<>();
+        if (json.has("ids") && json.get("ids").isArray()) {
+            json.get("ids").forEach(node -> ids.add(node.asText()));
         }
+
+        if (ids.isEmpty()) return sendJson(session, Map.of("type", "STATUS_LIST", "users", List.of()));
+
+        return userService.getInfoAboutUsers(userId, new UsersRequest(ids))
+                .flatMap(res -> sendJson(session, Map.of("type", "STATUS_LIST", "users", res)))
+                .onErrorResume(e -> sendJson(session, Map.of("type", "ERROR", "message", "STATUS failed")));
+    }
+
+    private Mono<Void> handleKeyExchange(JsonNode json, String userId, String type) {
+        String targetId = json.get("targetId").asText();
+        return sendToUser(targetId, Map.of(
+                "type", type,
+                "fromId", userId,
+                "publicKey", json.get("publicKey").asText()
+        ));
+    }
+
+    private Mono<Void> handleAcceptFriend(JsonNode json, String userId) {
+        String requesterId = json.get("requesterId").asText();
+        return friendsService.acceptFriendRequest(userId, requesterId)
+                .flatMap(friendship -> sendToUser(requesterId, Map.of(
+                        "type", "FRIEND_ACCEPTED_HANDSHAKE",
+                        "fromId", userId,
+                        "publicKey", json.get("publicKey").asText()
+                )));
+    }
+
+    private Mono<Void> handleGroupKeyDistribution(JsonNode json, String userId) {
+        String chatId = json.get("chatId").asText();
+        return broadcastToChatFriends(chatId, userId, Map.of(
+                "type", "GROUP_KEY_RECEIVED",
+                "chatId", chatId,
+                "fromId", userId,
+                "encryptedKey", json.get("encryptedKey").asText(),
+                "keyVersion", json.has("keyVersion") ? json.get("keyVersion").asLong() : 1L
+        ));
+    }
+
+    private Mono<Void> handleKeyRequired(JsonNode json, String userId) {
+        String chatId = json.get("chatId").asText();
+
+        if (json.has("keyVersion")) {
+            return broadcastToChatFriends(chatId, userId, Map.of(
+                    "type", "IS_KEY_REQUIRED",
+                    "chatId", chatId,
+                    "senderId", userId,
+                    "keyVersion", json.get("keyVersion").asLong()
+            ));
+        } else {
+            return broadcastToChatFriends(chatId, userId, Map.of(
+                    "type", "IS_KEY_REQUIRED",
+                    "chatId", chatId,
+                    "senderId", userId
+            ));
+        }
+    }
+    private Mono<Void> handleOldHagsKeyDistribution(JsonNode json, String userId) {
+        String chatId = json.get("chatId").asText();
+        return broadcastToChatFriends(chatId, userId, Map.of(
+                "type", "OLD_KEYS_FOR_OLD_HAGS",
+                "chatId", chatId,
+                "senderId", userId,
+                "encryptedKey", json.get("encryptedKey").asText(),
+                "keyVersion", json.has("keyVersion") ? json.get("keyVersion").asLong() : 1L
+        ));
+    }
+
+    private Mono<Void> handleKeyNeededReply(JsonNode json, String userId) {
+        String targetId = json.get("targetId").asText();
+        return sendToUser(targetId, Map.of(
+                "type", "KEY_NEEDED_REPLY",
+                "chatId", json.get("chatId").asText(),
+                "fromId", userId
+        ));
+    }
+
+    private Mono<Void> handleChatMemberUpdate(JsonNode json, String userId, String type) {
+        String chatId = json.get("chatId").asText();
+        String targetId = json.get("targetId").asText();
+        Map<String, Object> payload = Map.of(
+                "type", type,
+                "chatId", chatId,
+                "targetId", targetId,
+                "actorId", userId
+        );
+
+        Mono<Void> notifyTarget = sendToUser(targetId, payload);
+        Mono<Void> notifyOthers = broadcastToChatFriends(chatId, userId, payload, List.of(targetId));
+
+        return Mono.when(notifyTarget, notifyOthers);
+    }
+
+
+    private Mono<Void> sendToUser(String targetId, Object data) {
+        WebSocketSession targetSession = webSocketSessionRegistry.get(targetId);
+        if (targetSession != null && targetSession.isOpen()) {
+            return sendJson(targetSession, data);
+        }
+        return Mono.empty();
+    }
+
+    private Mono<Void> broadcastToChatFriends(String chatId, String userId, Object data) {
+        return broadcastToChatFriends(chatId, userId, data, List.of());
+    }
+
+    private Mono<Void> broadcastToChatFriends(String chatId, String userId, Object data, List<String> excludeIds) {
+        return friendsService.getFriendsByChatId(chatId, userId)
+                .filter(id -> !id.equals(userId) && !excludeIds.contains(id))
+                .flatMap(targetId -> sendToUser(targetId, data))
+                .then();
+    }
+
+    private Mono<Void> sendJson(WebSocketSession session, Object data) {
+        return Mono.fromCallable(() -> objectMapper.writeValueAsString(data))
+                .flatMap(json -> session.send(Mono.just(session.textMessage(json))))
+                .doOnError(e -> log.error("JSON Error", e));
     }
 }

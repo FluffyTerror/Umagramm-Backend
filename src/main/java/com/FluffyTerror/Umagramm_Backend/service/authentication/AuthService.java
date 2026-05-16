@@ -48,7 +48,7 @@ public class AuthService {
 
             String userId = UUID.randomUUID().toString();
 
-            // 1. Определяем ID фотографии: либо сохраняем новую, либо берем константу
+            //  Определяем ID фотографии: либо сохраняем новую, либо берем константу
             Mono<Long> photoIdMono = (photo != null)
                     ? attachmentService.saveFile(photo, userId)
                     .flatMap(filePath -> {
@@ -61,7 +61,7 @@ public class AuthService {
                     // Если фото не прислали, просто возвращаем ID 1 (наш эталон из БД)
                     : Mono.just(1L);
 
-            // 2. Основная цепочка регистрации
+            //  Основная цепочка регистрации
             return photoIdMono.flatMap(photoId -> {
                 User user = new User();
                 user.setId(userId);
