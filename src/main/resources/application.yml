@@ -1,30 +1,33 @@
 spring:
   r2dbc:
     url: r2dbc:postgresql://localhost:5433/umagramm_db
-    username: postgres # Было username
+    username: postgres
     password: gigapass1488
+
   flyway:
     enabled: true
     url: jdbc:postgresql://localhost:5433/umagramm_db
-    user: postgres     # Было username
+    user: postgres
     password: gigapass1488
     locations: classpath:db/migration
     baseline-on-migrate: true
-    codec:
-      multipart:
-        # Размер одного куска (чанка). Если клиент шлет по 5-10 МБ, ставим с запасом.
-        max-in-memory-size: 15MB
-        max-disk-usage-per-part: 15MB
-        max-parts: 5 # В одном запросе будет только 1 файл-чанк и метаданные
-  springdoc:
-    default-produces-media-type: application/json
-  logging:
-    level:
-      org.springframework.web: DEBUG
+
+  # Настройки кодеков для WebFlux (теперь они строго на уровне spring, а не внутри flyway)
+  codec:
+    max-in-memory-size: 15MB # Защитит от DataBufferLimitException при загрузке файлов
+
   data:
     redis:
-      host: localhost # когда бэк будет тоже в докере - поменять
+      host: localhost # Когда бэк уедет в докер — поменяешь на имя контейнера redis-umagramm
       port: 6379
+
+  springdoc:
+    default-produces-media-type: application/json
+
+logging:
+  level:
+    org.springframework.web: DEBUG
+
 
 application:
   security:
@@ -33,7 +36,12 @@ application:
       access-token-ttl: 1h
       refresh-token-ttl: 60d
 
+  minio:
+    endpoint: http://localhost:9000
+    access-key: admin
+    secret-key: supersecretpassword # TODO: перед деплоем поменять!!!!!
+    bucket-name: umagram-attachments
+
   file:
     uploads:
       media-output-path: ./uploads
-

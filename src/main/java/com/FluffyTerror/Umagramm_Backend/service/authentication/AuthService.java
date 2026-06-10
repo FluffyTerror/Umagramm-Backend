@@ -14,6 +14,7 @@ import com.FluffyTerror.Umagramm_Backend.responses.authentication.RegisterRespon
 import com.FluffyTerror.Umagramm_Backend.service.attachment.AttachmentService;
 import com.FluffyTerror.Umagramm_Backend.service.jwt.JwtService;
 import com.FluffyTerror.Umagramm_Backend.service.jwt.RefreshTokenService;
+import io.minio.MinioClient;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.codec.multipart.FilePart;
@@ -39,7 +40,6 @@ public class AuthService {
     private final AttachmentRepository attachmentRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserRecoveryCodeRepository userRecoveryCodeRepository;
-
     public Mono<@NonNull RegisterResponse> register(RegisterRequest request, FilePart photo) {
         return users.existsByUsername(request.username()).flatMap(exists -> {
             if (exists) {

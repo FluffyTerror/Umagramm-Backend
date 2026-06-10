@@ -51,6 +51,8 @@ dependencies {
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.13.0' // or 'io.jsonwebtoken:jjwt-gson:0.13.0' for gson
     // Source: https://mvnrepository.com/artifact/com.google.firebase/firebase-admin
     implementation 'com.google.firebase:firebase-admin:9.8.0'
+    implementation("io.minio:minio:9.0.0")
+
 	/*
       Uncomment this next dependency if you are using:
        - JDK 10 or earlier, and you want to use RSASSA-PSS (PS256, PS384, PS512) signature algorithms.

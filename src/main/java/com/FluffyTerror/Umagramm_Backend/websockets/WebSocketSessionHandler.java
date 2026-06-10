@@ -84,6 +84,7 @@ public class WebSocketSessionHandler implements WebSocketHandler {
                 case "KEY_NEEDED_REPLY" -> handleKeyNeededReply(json, userId);
                 case "CHAT_MEMBER_ADDED", "CHAT_MEMBER_REMOVED" -> handleChatMemberUpdate(json, userId, type);
                 case "OLD_KEYS_FOR_OLD_HAGS"->handleOldHagsKeyDistribution(json,userId);
+                case "SYSTEM"->handleSystem(json,userId);
                 default -> {
                     log.warn("Unknown WS type: {} from user: {}", type, userId);
                     yield Mono.empty();
@@ -95,11 +96,21 @@ public class WebSocketSessionHandler implements WebSocketHandler {
         }
     }
 
-
     private Mono<Void> handleSeenAction(JsonNode json, String userId) {
         String chatId = json.get("chatId").asText();
         Long lastId = json.get("lastMessageId").asLong();
         return messageService.setMessagesToSeen(chatId, lastId, userId);
+    }
+
+    private Mono<Void> handleSystem(JsonNode json, String userId) {
+        String chatId = json.get("chatId").asText();
+        return broadcastToChatFriends(chatId, userId, Map.of(
+                "type", "MESSAGE",
+                "chatId", chatId,
+                "senderId", userId,
+                "content", json.get("content").asText(),
+                "createdDate", json.has("createdDate")
+        ));
     }
 
     private Mono<Void> handleFriendRequest(JsonNode json, String userId, WebSocketSession session) {

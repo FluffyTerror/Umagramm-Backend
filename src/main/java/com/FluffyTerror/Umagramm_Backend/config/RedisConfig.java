@@ -1,4 +1,4 @@
-package com.FluffyTerror.Umagramm_Backend;
+package com.FluffyTerror.Umagramm_Backend.config;
 
 
 import org.springframework.context.annotation.Bean;

@@ -1,8 +1,7 @@
-package com.FluffyTerror.Umagramm_Backend;
+package com.FluffyTerror.Umagramm_Backend.config;
 
 import org.flywaydb.core.Flyway;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
