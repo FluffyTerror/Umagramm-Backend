@@ -84,7 +84,7 @@ public class WebSocketSessionHandler implements WebSocketHandler {
                 case "KEY_NEEDED_REPLY" -> handleKeyNeededReply(json, userId);
                 case "CHAT_MEMBER_ADDED", "CHAT_MEMBER_REMOVED" -> handleChatMemberUpdate(json, userId, type);
                 case "OLD_KEYS_FOR_OLD_HAGS"->handleOldHagsKeyDistribution(json,userId);
-                case "SYSTEM"->handleSystem(json,userId);
+                case "MESSAGE"->handleMessage(json,userId);
                 default -> {
                     log.warn("Unknown WS type: {} from user: {}", type, userId);
                     yield Mono.empty();
@@ -102,14 +102,25 @@ public class WebSocketSessionHandler implements WebSocketHandler {
         return messageService.setMessagesToSeen(chatId, lastId, userId);
     }
 
-    private Mono<Void> handleSystem(JsonNode json, String userId) {
+    private Mono<Void> handleMessage(JsonNode json, String userId) {
         String chatId = json.get("chatId").asText();
+
+        // Получаем вложенный объект message (или используем корень, если его нет)
+        JsonNode messageNode = json.has("message") ? json.get("message") : json;
+
+        // Безопасно извлекаем данные
+        String content = messageNode.has("content") ? messageNode.get("content").asText() : "";
+        String createdDate = messageNode.has("createdDate") ? messageNode.get("createdDate").asText() : "";
+        String messageType = messageNode.has("messageType") ? messageNode.get("messageType").asText() : "TEXT";
+
+        // Собираем payload для рассылки
         return broadcastToChatFriends(chatId, userId, Map.of(
                 "type", "MESSAGE",
                 "chatId", chatId,
                 "senderId", userId,
-                "content", json.get("content").asText(),
-                "createdDate", json.has("createdDate")
+                "content", content,
+                "messageType", messageType,
+                "createdDate", createdDate
         ));
     }
 

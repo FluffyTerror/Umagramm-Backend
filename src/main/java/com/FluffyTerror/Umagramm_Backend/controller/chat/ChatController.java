@@ -47,12 +47,12 @@ public class ChatController {
     }
 
     @PostMapping("/add-chat-member")
-    public Mono<ChatMember> addChatMember(AddChatMemberRequest req,@AuthenticationPrincipal User user){
+    public Mono<User> addChatMember(AddChatMemberRequest req,@AuthenticationPrincipal User user){
         return chatService.addChatMemberToChat(req, user.getId());
     }
 
     @PostMapping("/kick-chat-member")
-    public Mono<Void> kickChatMember(KickChatMemberRequest req, @AuthenticationPrincipal User user){
+    public Mono<User> kickChatMember(KickChatMemberRequest req, @AuthenticationPrincipal User user){
         return chatService.kickChatMember(req, user.getId());
     }
 

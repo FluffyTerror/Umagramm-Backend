@@ -205,50 +205,54 @@ public class ChatService {
                 .flatMap(chat -> enrichChatWithDetails(chat, userId));
     }
 
-    public Mono<ChatMember> addChatMemberToChat(AddChatMemberRequest request, String initiatorId) {
+    public Mono<User> addChatMemberToChat(AddChatMemberRequest request, String initiatorId) {
         return chatRepository.findById(request.chatId())
                 .filter(chat -> chat.getChatType() == ChatType.GROUP)
-                .switchIfEmpty(Mono.error(() -> new IllegalArgumentException("Only for group chats")))
-                // Открываем блок { }, чтобы сохранить переменную 'chat' в области видимости
-                .flatMap(chat -> {
+                .switchIfEmpty(Mono.error(new IllegalArgumentException("Only for group chats")))
+                .flatMap(chat -> chatMemberRepository.findByChatIdAndUserId(chat.getId(), initiatorId)
+                        .switchIfEmpty(Mono.error(new IllegalArgumentException("You are not in this chat")))
+                        // Забываем про initiatorMember, так как он нам больше не нужен, идём дальше
+                        .then(chatMemberRepository.findByChatIdAndUserId(request.chatId(), request.userId()))
+                        // превращаем Mono<ChatMember> в Mono<Boolean>
+                        .hasElement()
+                        .flatMap(isAlreadyMember -> {
+                            if (isAlreadyMember) {
+                                return Mono.error(new IllegalArgumentException("Already in chat"));
+                            }
 
-                    return chatMemberRepository.findByChatIdAndUserId(chat.getId(), initiatorId)
-                            .switchIfEmpty(Mono.error(() -> new IllegalArgumentException("You are not in this chat")))
-                            .flatMap(initiatorMember -> chatMemberRepository.findByChatIdAndUserId(request.chatId(), request.userId())
-                                    .flatMap(existing -> Mono.<ChatMember>error(new IllegalArgumentException("Already in chat")))
-                                    .switchIfEmpty(Mono.defer(() -> {
+                            // Начинаем цепочку получения юзера и сохранения данных
+                            return userRepository.findById(request.userId())
+                                    .switchIfEmpty(Mono.error(new IllegalArgumentException("User not found")))
+                                    .flatMap(user -> {
 
-                                        // 1. Теперь 'chat' доступен, так как мы всё ещё внутри верхнего flatMap
+                                        // 1. Мутируем чат и создаем мембера
                                         chat.setKeyVersion(chat.getKeyVersion() + 1);
-
                                         ChatMember chatMember = createMember(request.chatId(), request.userId(), initiatorId, MemberRole.MEMBER);
+                                        String name = (user.getFirstName() + " " + user.getLastName()).trim();
 
-                                        // 2. Сохраняем обновленный чат и нового участника
+                                        // 2. Сохраняем всё в базу строго по очереди
                                         return chatRepository.save(chat)
                                                 .then(chatMemberRepository.save(chatMember))
-                                                .flatMap(savedMember -> userRepository.findById(request.userId())
-                                                        .flatMap(user -> {
-                                                            String name = (user.getFirstName() + " " + user.getLastName()).trim();
-                                                            // Передаем текущую версию ключа в системное сообщение
-                                                            return saveSystemMessage(
-                                                                    request.chatId(),
-                                                                    name + " joined the chat",
-                                                                    initiatorId,
-                                                                    request.userId(),
-                                                                    "CHAT_MEMBER_ADDED",
-                                                                    chat.getKeyVersion()
-                                                            );
-                                                        })
-                                                        .thenReturn(savedMember));
-                                    }))
-                            );
-                }); // Закрываем блок flatMap(chat -> { ... })
+                                                .then(saveSystemMessage(
+                                                        request.chatId(),
+                                                        name + " joined the chat",
+                                                        initiatorId,
+                                                        request.userId(),
+                                                        "CHAT_MEMBER_ADDED",
+                                                        chat.getKeyVersion()
+                                                ))
+                                                // 3. Возвращаем саму сущность пользователя!
+                                                .thenReturn(user);
+                                    });
+                        })
+                );
     }
 
     @Transactional
-    public Mono<Void> kickChatMember(KickChatMemberRequest request, String initiatorId) {
+    public Mono<User> kickChatMember(KickChatMemberRequest request, String initiatorId) {
         return chatRepository.findById(request.chatId())
                 .filter(chat -> chat.getChatType() == ChatType.GROUP)
+                .switchIfEmpty(Mono.error(new IllegalArgumentException("Chat not found or not a group")))
                 .flatMap(chat -> Mono.zip(
                         chatMemberRepository.findByChatIdAndUserId(request.chatId(), initiatorId),
                         chatMemberRepository.findByChatIdAndUserId(request.chatId(), request.userId()),
@@ -262,17 +266,18 @@ public class ChatService {
                     boolean isSelfKick = initiatorId.equals(request.userId());
                     boolean isInviter = initiatorId.equals(target.getInvitedBy());
 
+                    // Проверяем права
                     if (isAdmin || isSelfKick || isInviter) {
                         String name = (targetUser.getFirstName() + " " + targetUser.getLastName()).trim();
                         String actionText = isSelfKick ? name + " left the chat" : name + " was removed from the chat";
                         String actionType = isSelfKick ? "CHAT_MEMBER_LEFT" : "CHAT_MEMBER_REMOVED";
+
                         // 1. Инкрементируем версию ключа чата
                         chat.setKeyVersion(chat.getKeyVersion() + 1);
 
                         // 2. Сохраняем чат с новой версией, удаляем юзера и шлем системное сообщение
                         return chatRepository.save(chat)
                                 .then(chatMemberRepository.delete(target))
-                                // ДОБАВЛЕНЫ: request.userId() и actionType
                                 .then(saveSystemMessage(
                                         request.chatId(),
                                         actionText,
@@ -280,9 +285,12 @@ public class ChatService {
                                         request.userId(),
                                         actionType,
                                         chat.getKeyVersion()
-                                ));
+                                ))
+                                // 3. Возвращаем объект удаленного пользователя в конце успешной цепочки
+                                .thenReturn(targetUser);
                     } else {
-                        return Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN));
+                        // Обязательная ветка else, иначе поток зависнет или упадет
+                        return Mono.error(new AccessDeniedException("No permission to kick this user"));
                     }
                 }));
     }
