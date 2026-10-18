@@ -5,6 +5,7 @@ uploads/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
+umagramm-firebase-adminsdk-creds.json
 
 ### STS ###
 .apt_generated
